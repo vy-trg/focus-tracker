@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Focus Tracker</title>
+</head>
+<body>
+  <h1>Pomodoro Focus Tracker</h1>
+  <a href="/new">+ Add New Session</a>
+  
+  <ul>
+    <% sessions.forEach(session => { %>
+      <li>
+        <strong><%= session.label %></strong> - 
+        <span><%= session.minutes %> minutes</span> 
+        <small>(Started at: <%= session.started_at %>)</small>
+      </li>
+    <% }) %>
+  </ul>
+</body>
+</html>
