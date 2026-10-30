@@ -10,6 +10,9 @@ app.set("view engine", "ejs");
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve browser files (timer.js) from the public folder
+app.use(express.static("public"));
+
 // --- EJS VIEW ROUTES ---
 app.get("/", async (req, res) => {
   try {

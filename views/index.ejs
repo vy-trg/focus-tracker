@@ -7,18 +7,27 @@
 </head>
 <body>
   <h1>Pomodoro Focus Tracker</h1>
-  
-  <% if (sessions.length === 0) { %>
-    <p>No sessions yet.</p>
-  <% } %>
-  <ul>
-    <% sessions.forEach(session => { %>
-      <li>
-        <strong><%= session.label %></strong> - 
-        <span><%= session.minutes %> minutes</span> 
-        <small>(Started at: <%= new Date(session.started_at).toLocaleString("en-AU", { timeZone: "Australia/Brisbane" }) %>)</small>
-      </li>
-    <% }) %>
-  </ul>
+
+  <section>
+    <label for="label-input">What are you focusing on?</label>
+    <input id="label-input" type="text" maxlength="60" placeholder="e.g. Odin Project Node">
+    <p id="time-display">25:00</p>
+    <button id="start-btn">Start</button>
+    <button id="pause-btn">Pause</button>
+    <button id="reset-btn">Reset</button>
+    <p id="message"></p>
+  </section>
+
+  <section>
+    <h2>Today</h2>
+    <p id="stats">Loading…</p>
+  </section>
+
+  <section>
+    <h2>Recent sessions</h2>
+    <ul id="session-list"></ul>
+  </section>
+
+  <script src="/timer.js"></script>
 </body>
 </html>
