@@ -4,9 +4,12 @@ A Pomodoro timer that saves every finished focus session to PostgreSQL and shows
 
 🔗 **[Live Demo](https://focus-tracker-2ooe.onrender.com)** *(free hosting: the first load can take 30–60 seconds while the server wakes up)*
 
-<!-- Add after taking a screenshot (save it as docs/screenshot.png):
-<p align="center"><img src="docs/screenshot.png" alt="Focus Tracker showing the timer, today's stats and recent sessions" width="360"></p>
--->
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
+    <img src="docs/screenshot-light.png" alt="Focus Tracker showing the timer, today's stats and recent sessions" width="360">
+  </picture>
+</p>
 
 ---
 
