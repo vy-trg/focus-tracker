@@ -14,14 +14,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
 // --- EJS VIEW ROUTES ---
-app.get("/", async (req, res) => {
-  try {
-    const sessions = await db.getAllSessions();
-    res.render("index", { sessions });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Server Error");
-  }
+// The page is a shell; timer.js loads sessions and stats from the API.
+app.get("/", (req, res) => {
+  res.render("index");
 });
 
 // --- VALIDATION HELPERS ---
