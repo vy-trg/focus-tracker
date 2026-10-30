@@ -6,29 +6,27 @@ async function getAllSessions() {
   return rows;
 }
 
-// 2. Insert a new focus session
+// 2. Insert a new focus session (PostgreSQL uses $1, $2 and RETURNING)
 async function insertSession(label, minutes) {
-  // Use RETURNING equivalent for SQLite or standard INSERT
   const result = await pool.query(
-    "INSERT INTO sessions (label, minutes) VALUES (?, ?)",
+    "INSERT INTO sessions (label, minutes) VALUES ($1, $2) RETURNING *",
     [label, minutes]
   );
-  return result;
+  return result.rows[0];
 }
 
-// 3. Delete a session by ID
+// 3. Delete a session by ID (PostgreSQL uses $1)
 async function deleteSession(id) {
-  const result = await pool.query("DELETE FROM sessions WHERE id = ?", [id]);
+  const result = await pool.query("DELETE FROM sessions WHERE id = $1", [id]);
   return result.rowCount; // returns number of affected rows
 }
 
-// 4. Get focus statistics (today and overall/weekly)
+// 4. Get focus statistics (today and overall) using Postgres date casting
 async function getStats() {
-  // For SQLite, we use date('now') for current date comparison
   const todayStatsQuery = await pool.query(
     `SELECT COUNT(*) as count, COALESCE(SUM(minutes), 0) as total_minutes 
      FROM sessions 
-     WHERE date(started_at) = date('now')`
+     WHERE started_at::date = CURRENT_DATE`
   );
 
   const allTimeStatsQuery = await pool.query(
