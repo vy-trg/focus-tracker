@@ -4,29 +4,38 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Focus Tracker</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <h1>Pomodoro Focus Tracker</h1>
+  <main>
+    <h1>Focus Tracker</h1>
 
-  <section>
-    <label for="label-input">What are you focusing on?</label>
-    <input id="label-input" type="text" maxlength="60" placeholder="e.g. Odin Project Node">
-    <p id="time-display">25:00</p>
-    <button id="start-btn">Start</button>
-    <button id="pause-btn">Pause</button>
-    <button id="reset-btn">Reset</button>
-    <p id="message"></p>
-  </section>
+    <section class="card timer">
+      <label for="label-input">What are you focusing on?</label>
+      <input id="label-input" type="text" maxlength="60" placeholder="e.g. Odin Project Node" autocomplete="off">
+      <p id="time-display" aria-live="off">25:00</p>
+      <div class="buttons">
+        <button id="start-btn" class="primary">Start</button>
+        <button id="pause-btn" disabled>Pause</button>
+        <button id="reset-btn">Reset</button>
+      </div>
+      <p id="message" role="status"></p>
+    </section>
 
-  <section>
-    <h2>Today</h2>
-    <p id="stats">Loading…</p>
-  </section>
+    <section class="card">
+      <h2>Stats</h2>
+      <div class="stats">
+        <div><b id="today-count">–</b><span>sessions today</span></div>
+        <div><b id="today-minutes">–</b><span>minutes today</span></div>
+        <div><b id="all-minutes">–</b><span>minutes all time</span></div>
+      </div>
+    </section>
 
-  <section>
-    <h2>Recent sessions</h2>
-    <ul id="session-list"></ul>
-  </section>
+    <section class="card">
+      <h2>Recent sessions</h2>
+      <ul id="session-list"></ul>
+    </section>
+  </main>
 
   <script src="/timer.js"></script>
 </body>

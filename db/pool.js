@@ -9,10 +9,11 @@ const pool = new Pool({
   ssl: isLocal ? false : { rejectUnauthorized: false },
 });
 
-// Thêm sự kiện để bắt lỗi kết nối nếu có trục trặc mạng
-pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err);
-  process.exit(-1);
+// Neon closes connections that sit idle. That fires an error on the idle
+// client; log it and let the pool open a fresh connection next time,
+// instead of crashing the whole server.
+pool.on("error", (err) => {
+  console.error("Idle database client error:", err.message);
 });
 
 module.exports = {
