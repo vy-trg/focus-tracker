@@ -2,18 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Focus Tracker</title>
 </head>
 <body>
   <h1>Pomodoro Focus Tracker</h1>
-  <a href="/new">+ Add New Session</a>
   
+  <% if (sessions.length === 0) { %>
+    <p>No sessions yet.</p>
+  <% } %>
   <ul>
     <% sessions.forEach(session => { %>
       <li>
         <strong><%= session.label %></strong> - 
         <span><%= session.minutes %> minutes</span> 
-        <small>(Started at: <%= session.started_at %>)</small>
+        <small>(Started at: <%= new Date(session.started_at).toLocaleString("en-AU", { timeZone: "Australia/Brisbane" }) %>)</small>
       </li>
     <% }) %>
   </ul>
