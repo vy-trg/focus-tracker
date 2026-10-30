@@ -1,38 +1,19 @@
-const sqlite3 = require("sqlite3").verbose();
-const path = require("path");
+require("dotenv").config();
+const { Pool } = require("pg");
 
-const dbPath = path.resolve(__dirname, "focus_tracker.db");
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error("Error opening database:", err.message);
-  } else {
-    console.log("Connected to local SQLite database for Focus Tracker.");
-  }
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
 });
 
-db.run(`
-  CREATE TABLE IF NOT EXISTS sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    label TEXT NOT NULL,
-    minutes INTEGER NOT NULL CHECK (minutes > 0),
-    started_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
+// Thêm sự kiện để bắt lỗi kết nối nếu có trục trặc mạng
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
+  process.exit(-1);
+});
 
 module.exports = {
-  query: (sql, params = []) => {
-    return new Promise((resolve, reject) => {
-      if (sql.trim().toUpperCase().startsWith("SELECT")) {
-        db.all(sql, params, (err, rows) => {
-          if (err) reject(err);
-          else resolve({ rows });
-        });
-      } else {
-        db.run(sql, params, function (err) {
-          if (err) reject(err);
-          else resolve({ rowCount: this.changes });
-        });
-      }
-    });
-  },
+  query: (text, params) => pool.query(text, params),
 };
