@@ -21,22 +21,25 @@ async function deleteSession(id) {
   return result.rowCount; // returns number of affected rows
 }
 
-// 4. Get focus statistics (today and overall) using Postgres date casting
+// 4. Get focus statistics (today and all time).
+// The database runs in UTC, so "today" is converted to Brisbane time first,
+// otherwise sessions before 10am Brisbane time would count as yesterday.
 async function getStats() {
-  const todayStatsQuery = await pool.query(
-    `SELECT COUNT(*) as count, COALESCE(SUM(minutes), 0) as total_minutes 
-     FROM sessions 
-     WHERE started_at::date = CURRENT_DATE`
+  const today = await pool.query(
+    `SELECT COUNT(*)::int AS count, COALESCE(SUM(minutes), 0)::int AS total_minutes
+     FROM sessions
+     WHERE (started_at AT TIME ZONE 'Australia/Brisbane')::date
+         = (now() AT TIME ZONE 'Australia/Brisbane')::date`
   );
 
-  const allTimeStatsQuery = await pool.query(
-    `SELECT COUNT(*) as count, COALESCE(SUM(minutes), 0) as total_minutes 
+  const allTime = await pool.query(
+    `SELECT COUNT(*)::int AS count, COALESCE(SUM(minutes), 0)::int AS total_minutes
      FROM sessions`
   );
 
   return {
-    today: todayStatsQuery.rows[0],
-    allTime: allTimeStatsQuery.rows[0],
+    today: today.rows[0],
+    allTime: allTime.rows[0],
   };
 }
 

@@ -21,7 +21,31 @@ app.get("/", async (req, res) => {
   }
 });
 
+// --- VALIDATION HELPERS ---
+// Returns a list of problems with the body; an empty list means it is valid.
+function validateSession({ label, minutes }) {
+  const errors = [];
+  if (typeof label !== "string" || label.trim().length === 0 || label.trim().length > 60) {
+    errors.push({ field: "label", message: "Label must be 1-60 characters" });
+  }
+  const mins = Number(minutes);
+  if (!Number.isInteger(mins) || mins < 1 || mins > 180) {
+    errors.push({ field: "minutes", message: "Minutes must be a whole number from 1 to 180" });
+  }
+  return errors;
+}
+
+// Route ids must be positive whole numbers, otherwise Postgres throws an error.
+function parseId(raw) {
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 // --- API ENDPOINTS ---
+
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true });
+});
 
 // 1. GET /api/sessions: Fetch latest 50 sessions as JSON
 app.get("/api/sessions", async (req, res) => {
@@ -37,12 +61,12 @@ app.get("/api/sessions", async (req, res) => {
 // 2. POST /api/sessions: Create a new session via API
 app.post("/api/sessions", async (req, res) => {
   try {
-    const { label, minutes } = req.body;
-    if (!label || !minutes || minutes <= 0) {
-      return res.status(400).json({ error: "Invalid label or minutes" });
+    const errors = validateSession(req.body);
+    if (errors.length > 0) {
+      return res.status(400).json({ errors });
     }
-    await db.insertSession(label, minutes);
-    res.status(201).json({ message: "Session created successfully", label, minutes });
+    const session = await db.insertSession(req.body.label.trim(), Number(req.body.minutes));
+    res.status(201).json(session); // includes the new id
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server Error" });
@@ -52,9 +76,12 @@ app.post("/api/sessions", async (req, res) => {
 // 3. DELETE /api/sessions/:id: Delete a session by ID
 app.delete("/api/sessions/:id", async (req, res) => {
   try {
-    const sessionId = req.params.id;
+    const sessionId = parseId(req.params.id);
+    if (sessionId === null) {
+      return res.status(400).json({ error: "Id must be a positive whole number" });
+    }
     const rowCount = await db.deleteSession(sessionId);
-    
+
     if (rowCount === 0) {
       return res.status(404).json({ error: "Session not found" });
     }
@@ -76,7 +103,8 @@ app.get("/api/stats", async (req, res) => {
   }
 });
 
-const PORT = 3000;
+// Render (and most hosts) set PORT for you; 3000 is the local default.
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Focus Tracker app listening on port ${PORT}!`);
 });
