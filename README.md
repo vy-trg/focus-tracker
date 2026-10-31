@@ -92,3 +92,11 @@ scripts/test-db.js  Checks the database connection
 - Time zones: storing `TIMESTAMPTZ` in UTC and converting to Brisbane time when counting "today".
 - Why `setInterval` timers drift on phones, and how counting to an end time fixes it.
 - Deploying to Render with the database URL as an environment variable, never in the repo.
+
+---
+
+## Known limitations & next steps
+
+- There are no user accounts, so everyone using the live demo shares one list of sessions (and can delete any of them). Next: sign-in so each person sees only their own sessions.
+- The focus length is fixed at 25 minutes. Next: let the user pick the length and add short breaks between sessions.
+- A notification or sound when the timer ends, so it works with the tab in the background.
