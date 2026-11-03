@@ -111,3 +111,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 #session-list .meta { font-size: 0.85rem; color: var(--muted); }
 #session-list .empty { color: var(--muted); }
 #session-list button { padding: 6px 12px; min-height: 36px; font-size: 0.85rem; }
+
+/* Top bar: title on the left, user and log out on the right */
+.topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.who { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--muted); }
+.who form { margin: 0; }
+.who button { padding: 6px 12px; min-height: 36px; font-size: 0.85rem; }
+
+/* Login and signup forms */
+.auth-form label { display: block; text-align: left; font-size: 0.9rem; color: var(--muted); margin: 12px 0 6px; }
+.auth-form button.primary { width: 100%; margin-top: 16px; }
+.error { color: var(--error); }
