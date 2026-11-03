@@ -1,20 +1,8 @@
-require("dotenv").config({ quiet: true });
-const { Pool } = require("pg");
+const db = require("../db/pool");
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
-});
+console.log("Attempting to connect to PostgreSQL...");
 
-console.log("Attempting to connect to Neon PostgreSQL...");
-
-pool.query("SELECT NOW()", (err, res) => {
-  if (err) {
-    console.error("❌ DATABASE CONNECTION ERROR:", err);
-  } else {
-    console.log("✅ CONNECTION SUCCESSFUL! Server timestamp from DB:", res.rows[0].now);
-  }
-  pool.end();
-});
+db.query("SELECT NOW()")
+  .then((res) => console.log("✅ CONNECTION SUCCESSFUL! Server time:", res.rows[0].now))
+  .catch((err) => console.error("❌ DATABASE CONNECTION ERROR:", err.message))
+  .finally(() => db.pool.end());
