@@ -9,7 +9,7 @@
 - `.gitignore` now ignores `.env.*` except `.env.example`.
 - Rewrote the history with `git filter-repo` to remove `.env.bak` from every commit, then force-pushed (suggested by Chris: nobody needs to know the database host or user name either).
 - Added gitleaks as a pre-commit hook and in GitHub Actions.
-- GitHub still keeps the old commits behind Pull Request #1 (`refs/pull/1/head`), which a force push can't overwrite. I asked GitHub Support to remove them on [ngày gửi]. The password in them was already rotated, so this only hides the database host and user name.
+- GitHub still keeps the old commits behind Pull Request #1 (`refs/pull/1/head`), which a force push can't overwrite. I asked GitHub Support to remove them on 3rd November. The password in them was already rotated, so this only hides the database host and user name.
 
 **Lesson:** Once a secret is pushed, treat it as public. Revoke it first, then clean up. Deleting the file is not enough.
 
