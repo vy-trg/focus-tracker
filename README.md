@@ -59,6 +59,15 @@ All queries use parameters (`$1`, `$2`), never string concatenation, so user inp
 
 ---
 
+### Authentication
+
+- **Passwords** are hashed with bcrypt (cost 10) before they reach the database. Only the hash is stored (`$2b$10$…`), and login compares hashes with `bcrypt.compare`.
+- **Login sessions** use a signed cookie (`httpOnly`, `sameSite=lax`, `secure` in production). The session itself lives in Postgres (`user_sessions` table, via `connect-pg-simple`), so users stay logged in when Render restarts the app.
+- **Every query filters by `user_id`**, taken from the logged-in session, never from the request body. Deleting uses `WHERE id = $1 AND user_id = $2`, so trying to delete someone else's session matches no rows and returns `404`.
+- **Login errors don't reveal accounts:** a wrong username and a wrong password show the same message.
+
+---
+
 ## Run it locally
 
 **Needs:** Node.js 20 or newer and a PostgreSQL database (a free [Neon](https://neon.tech) project works).
@@ -116,12 +125,3 @@ scripts/test-db.js  Checks the database connection
 - The focus length is fixed at 25 minutes. Next: let the user pick the length and add short breaks between sessions.
 - A notification or sound when the timer ends, so it works with the tab in the background.
 - No password reset or email verification yet: a forgotten password means a new account.
-
----
-
-### Authentication
-
-- **Passwords** are hashed with bcrypt (cost 10) before they reach the database. Only the hash is stored (`$2b$10$…`), and login compares hashes with `bcrypt.compare`.
-- **Login sessions** use a signed cookie (`httpOnly`, `sameSite=lax`, `secure` in production). The session itself lives in Postgres (`user_sessions` table, via `connect-pg-simple`), so users stay logged in when Render restarts the app.
-- **Every query filters by `user_id`**, taken from the logged-in session, never from the request body. Deleting uses `WHERE id = $1 AND user_id = $2`, so trying to delete someone else's session matches no rows and returns `404`.
-- **Login errors don't reveal accounts:** a wrong username and a wrong password show the same message.
