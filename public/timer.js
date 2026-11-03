@@ -100,6 +100,10 @@ async function finishSession() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ label: labelInput.value.trim(), minutes }),
     });
+    if (res.status === 401) {
+      window.location.href = "/login";
+      return;
+    }
     if (!res.ok) throw new Error(`Couldn't save the session (error ${res.status}).`);
     showMessage("Session saved. Nice work!", "ok");
     resetTimer();
@@ -113,6 +117,10 @@ async function finishSession() {
 async function loadSessions() {
   try {
     const res = await fetch("/api/sessions");
+    if (res.status === 401) {
+      window.location.href = "/login";
+      return;
+    }
     if (!res.ok) throw new Error();
     const sessions = await res.json();
 
@@ -157,6 +165,10 @@ async function loadSessions() {
 async function deleteSession(id) {
   try {
     const res = await fetch(`/api/sessions/${id}`, { method: "DELETE" });
+    if (res.status === 401) {
+      window.location.href = "/login";
+      return;
+    }
     if (!res.ok && res.status !== 404) throw new Error();
     loadSessions();
     loadStats();
@@ -168,6 +180,10 @@ async function deleteSession(id) {
 async function loadStats() {
   try {
     const res = await fetch("/api/stats");
+    if (res.status === 401) {
+      window.location.href = "/login";
+      return;
+    }
     if (!res.ok) throw new Error();
     const stats = await res.json();
     document.getElementById("today-count").textContent = stats.today.count;

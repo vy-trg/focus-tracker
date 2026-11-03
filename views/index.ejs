@@ -8,7 +8,13 @@
 </head>
 <body>
   <main>
-    <h1>Focus Tracker</h1>
+    <header class="topbar">
+      <h1>Focus Tracker</h1>
+      <div class="who">
+        <span>Logged in as <strong><%= username %></strong></span>
+        <form method="post" action="/logout"><button type="submit">Log out</button></form>
+      </div>
+    </header>
 
     <section class="card timer">
       <label for="label-input">What are you focusing on?</label>
