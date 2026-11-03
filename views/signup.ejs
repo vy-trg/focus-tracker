@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign up · Focus Tracker</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <h1>Focus Tracker</h1>
+    <section class="card">
+      <h2>Create an account</h2>
+      <% if (error) { %><p class="error" role="alert"><%= error %></p><% } %>
+      <form method="post" action="/signup" class="auth-form">
+        <label for="username">Username (3-30 letters, numbers or _)</label>
+        <input id="username" name="username" value="<%= username %>" autocomplete="username" required minlength="3" maxlength="30">
+        <label for="password">Password (at least 8 characters)</label>
+        <input id="password" name="password" type="password" autocomplete="new-password" required minlength="8">
+        <button class="primary" type="submit">Sign up</button>
+      </form>
+      <p>Already have an account? <a href="/login">Log in</a></p>
+    </section>
+  </main>
+</body>
+</html>
