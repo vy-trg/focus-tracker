@@ -122,3 +122,5 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .auth-form label { display: block; text-align: left; font-size: 0.9rem; color: var(--muted); margin: 12px 0 6px; }
 .auth-form button.primary { width: 100%; margin-top: 16px; }
 .error { color: var(--error); }
+
+a { color: var(--accent); }
