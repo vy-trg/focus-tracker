@@ -1,14 +1,34 @@
 const express = require("express");
+const helmet = require("helmet");
+const { rateLimit } = require("express-rate-limit");
 const app = express();
 
 const db = require("./db/queries");
 
+// Render sits in front of the app as a proxy; trust one hop so rate limiting
+// sees each visitor's real IP instead of Render's.
+app.set("trust proxy", 1);
+
+// Security headers (Content-Security-Policy, no MIME sniffing, etc.).
+// The page only loads its own files, so helmet's defaults are enough.
+app.use(helmet());
+
 // Set EJS as the template engine
 app.set("view engine", "ejs");
 
-// Middleware to parse JSON and URL-encoded bodies
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Parse JSON and form bodies, capped at 10kb so nobody can send a huge payload
+app.use(express.json({ limit: "10kb" }));
+app.use(express.urlencoded({ extended: false, limit: "10kb" }));
+
+// Each visitor (by IP): at most 100 API requests per 15 minutes.
+// Protects the free Neon database from scripts hammering the API.
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 100,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+});
+app.use("/api", apiLimiter);
 
 // Serve browser files (timer.js) from the public folder
 app.use(express.static("public"));
