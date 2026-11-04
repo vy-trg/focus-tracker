@@ -8,6 +8,7 @@ const bcrypt = require("bcryptjs");
 const db = require("./db/queries");
 const { pool } = require("./db/pool");
 const { passport, requireAuth } = require("./auth");
+const { validateSession, parseId } = require("./validation");
 
 const app = express();
 
@@ -116,26 +117,6 @@ app.post("/logout", (req, res, next) => {
 app.get("/", requireAuth, (req, res) => {
   res.render("index", { username: req.user.username });
 });
-
-// --- VALIDATION HELPERS ---
-// Returns a list of problems with the body; an empty list means it is valid.
-function validateSession({ label, minutes }) {
-  const errors = [];
-  if (typeof label !== "string" || label.trim().length === 0 || label.trim().length > 60) {
-    errors.push({ field: "label", message: "Label must be 1-60 characters" });
-  }
-  const mins = Number(minutes);
-  if (!Number.isInteger(mins) || mins < 1 || mins > 180) {
-    errors.push({ field: "minutes", message: "Minutes must be a whole number from 1 to 180" });
-  }
-  return errors;
-}
-
-// Route ids must be positive whole numbers, otherwise Postgres throws an error.
-function parseId(raw) {
-  const id = Number(raw);
-  return Number.isInteger(id) && id > 0 ? id : null;
-}
 
 // --- API ENDPOINTS ---
 // Everything under /api/sessions and /api/stats needs a logged-in user
