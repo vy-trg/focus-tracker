@@ -1,4 +1,5 @@
 # Focus Tracker ⏱️
+![CI](https://github.com/vy-trg/focus-tracker/actions/workflows/ci.yml/badge.svg)
 
 A Pomodoro timer that saves every finished focus session to PostgreSQL and shows how much you focused today. Built with Express and a small REST API; the browser talks to the API with `fetch`.
 
@@ -90,40 +91,20 @@ cp .env.example .env
 
 ---
 
-## Testing
-
-```bash
-npm test
-```
-
-Unit tests use Node's built-in test runner (`node:test`), so there's nothing extra to install. They cover `validation.js`, the checks every API request goes through:
-
-- a normal session passes; a 60-character label passes but 61 fails
-- minutes must be a whole number from 1 to 180 (`"abc"`, `25.5`, `0`, `-5`, `181`, `null` are rejected)
-- an empty, blank or missing label is rejected
-- a request with no body returns errors instead of crashing
-- `parseId` only accepts positive whole numbers
-
-These tests don't need a database, so they run anywhere, including CI.
-
----
-
 ## Project structure
 
 ```
-app.js             Express app: routes, validation, API, login sessions
-auth.js            Passport login strategy and the requireAuth guard
-db/pool.js         PostgreSQL connection pool (SSL for Neon)
-db/queries.js      All SQL queries
-db/schema.sql      Table definition with CHECK constraints
-views/index.ejs    Page layout
-views/login.ejs    Log in page
-views/signup.ejs   Sign up page
-public/timer.js    Timer and API calls in the browser
-public/style.css   Styles (light + dark)
-scripts/test-db.js Checks the database connection
-validation.js      Input checks for the API (unit tested)
-test/              Unit tests (npm test)
+app.js            Express app: routes, validation, API, login sessions
+auth.js           Passport login strategy and the requireAuth guard
+db/pool.js        PostgreSQL connection pool (SSL for Neon)
+db/queries.js     All SQL queries
+db/schema.sql     Table definition with CHECK constraints
+views/index.ejs   Page layout
+views/login.ejs   Log in page
+views/signup.ejs  Sign up page
+public/timer.js   Timer and API calls in the browser
+public/style.css  Styles (light + dark)
+scripts/test-db.js  Checks the database connection
 ```
 
 ---
