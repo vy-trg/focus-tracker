@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node app.js",
     "dev": "node --watch-path=app.js --watch-path=auth.js --watch-path=db --watch-path=views app.js",
-    "test-db": "node scripts/test-db.js"
+    "test-db": "node scripts/test-db.js",
+    "test": "node --test test/*.test.js"
   },
   "keywords": [],
   "author": "",
