@@ -8,7 +8,7 @@ function validateSession({ label, minutes } = {}) {
     errors.push({ field: "label", message: "Label must be 1-60 characters" });
   }
   const mins = Number(minutes);
-  if (!Number.isInteger(mins) || mins < 1 || mins > 180) {
+  if (!Number.isInteger(mins) || mins < 1 || mins > 200) {
     errors.push({ field: "minutes", message: "Minutes must be a whole number from 1 to 180" });
   }
   return errors;
