@@ -184,7 +184,12 @@ app.get("/api/stats", async (req, res) => {
 });
 
 // Render (and most hosts) set PORT for you; 3000 is the local default.
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Focus Tracker app listening on port ${PORT}!`);
-});
+// Only start the server when run directly (node app.js), not when a test imports the app.
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Focus Tracker app listening on port ${PORT}!`);
+  });
+}
+
+module.exports = app;
