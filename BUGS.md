@@ -22,3 +22,13 @@
 **Fix:** A local hook that calls `gitleaks git --pre-commit --staged --redact` with `pass_filenames: false`. Re-tested: the commit is now blocked.
 
 **Lesson:** A security check that hasn't been tested to fail isn't a check. Test the bad case, not just the good one.
+
+## `node --test` ran my database script as a test (4 Nov 2026)
+
+**What happened:** With `"test": "node --test"`, the test run printed "Attempting to connect to PostgreSQL".
+
+**Cause:** With no file list, `node --test` picks up any file named `test-*.js`, so it ran `scripts/test-db.js`, which connects to the real database.
+
+**Fix:** `"test": "node --test test/*.test.js"`, so only files in `test/` run.
+
+**Lesson:** Be explicit about what a tool runs. Unit tests should never touch a real database.
