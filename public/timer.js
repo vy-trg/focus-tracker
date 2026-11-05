@@ -274,7 +274,8 @@ function renderPresets() {
     btn.className = "preset";
     btn.setAttribute("aria-pressed", String(settings.preset === key));
     btn.innerHTML = `<b>${p.focus}/${p.short}</b><span></span>`;
-    btn.querySelector("span").textContent = `${p.name} · ${p.hint}`;
+    btn.querySelector("span").textContent = p.name;
+    btn.title = `${p.name}: ${p.focus} min focus, ${p.short} min break (${p.hint})`;
     btn.addEventListener("click", () => applyPreset(key));
     els.presets.append(btn);
   }
@@ -473,6 +474,10 @@ async function loadTasks() {
 }
 
 function renderTasks() {
+  const doneCount = tasks.filter((t) => t.done).length;
+  els.filterButtons.forEach((b) => {
+    if (b.dataset.filter === "done") b.textContent = doneCount ? `Done (${doneCount})` : "Done";
+  });
   const shown = tasks.filter((t) => (filter === "done" ? t.done : !t.done));
   els.taskList.innerHTML = "";
   if (shown.length === 0) {
@@ -547,6 +552,8 @@ async function toggleTask(t, done) {
   try {
     await api(`/api/tasks/${t.id}`, { method: "PATCH", body: JSON.stringify({ done }) });
     await loadTasks();
+    // Ticked tasks move to the Done tab; say so, so it doesn't look like the task vanished
+    if (done) showUndo("Task moved to Done", () => toggleTask(t, false));
   } catch (err) {
     showMessage(err.message, true);
   }
@@ -602,6 +609,30 @@ function deleteWithUndo(row, text, doDelete) {
       pendingDelete = null;
       els.toast.hidden = true;
       row.hidden = false;
+    },
+  };
+  pendingDelete = entry;
+}
+
+// Same toast as delete, for actions that already happened but can be reversed
+function showUndo(text, onUndo) {
+  if (pendingDelete) pendingDelete.commit();
+  els.toastText.textContent = text;
+  els.toast.hidden = false;
+  const timer = setTimeout(() => entry.commit(), 5000);
+  const entry = {
+    commit: () => {
+      clearTimeout(timer);
+      if (pendingDelete === entry) {
+        pendingDelete = null;
+        els.toast.hidden = true;
+      }
+    },
+    undo: () => {
+      clearTimeout(timer);
+      pendingDelete = null;
+      els.toast.hidden = true;
+      onUndo();
     },
   };
   pendingDelete = entry;
