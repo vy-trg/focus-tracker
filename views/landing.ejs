@@ -24,8 +24,12 @@
         </p>
       </div>
 
-      <!-- Preview of the timer, drawn with HTML and CSS only -->
-      <div class="device" aria-hidden="true">
+      <!-- Preview of the timer, drawn with HTML and CSS only. Every chip is a feature that exists in the app. -->
+      <div class="device-wrap" aria-hidden="true">
+      <span class="chip chip-a"><i class="dot seg-study"></i>Study · 50/10</span>
+      <span class="chip chip-b">This week <b>6h 20m</b></span>
+      <span class="chip chip-c"><i class="mini-bars"><i class="seg-study"></i><i class="seg-work"></i><i class="seg-reading"></i></i>Reports by category</span>
+      <div class="device">
         <div class="modes"><span class="mode on">Focus</span><span class="mode">Short break</span><span class="mode">Long break</span></div>
         <div class="preview-ring">
           <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="pr-track"></circle><circle cx="60" cy="60" r="52" class="pr-fill"></circle></svg>
@@ -34,15 +38,22 @@
         <div class="screen-dots"><i class="done"></i><i class="done"></i><i class="now"></i><i></i></div>
         <div class="pr-buttons"><i></i><i class="play"></i><i></i></div>
       </div>
+      </div>
     </section>
 
     <section class="features" aria-label="Features">
-      <article class="tile"><h2>Timer + breaks</h2><p>Focus blocks that switch to a break on their own, accurate even when the tab is in the background.</p></article>
-      <article class="tile"><h2>History</h2><p>Every finished focus session is saved to your account with what you worked on.</p></article>
-      <article class="tile"><h2>Stats</h2><p>Sessions and minutes for today and all time, at a glance.</p></article>
+      <article class="tile"><h2>Categories + to-do</h2><p>Tag each session as study, reading, work or journal, and link it to a task on your list.</p></article>
+      <article class="tile"><h2>Pomodoro presets</h2><p>25/5 for study, 50/10 for coding, 90/20 for deep work or 15/3 to get started. Breaks start on their own.</p></article>
+      <article class="tile"><h2>Reports</h2><p>Minutes per day for today, 7 or 30 days, split by category, so you see where your week went.</p></article>
     </section>
 
-    <footer class="foot"><a class="link" href="https://github.com/vy-trg/focus-tracker">Source on GitHub</a></footer>
+    <section class="built" aria-label="Built with">
+      <h2>Built with</h2>
+      <ul>
+        <li>Express</li><li>PostgreSQL (Neon)</li><li>Passport</li><li>Tests + GitHub Actions CI</li><li>Docker</li><li>Render</li>
+      </ul>
+      <a class="link" href="https://github.com/vy-trg/focus-tracker">Source on GitHub</a>
+    </section>
   </main>
 </body>
 </html>

@@ -1,4 +1,5 @@
 const pool = require("./pool");
+const { CATEGORIES } = require("../validation");
 const { countStreak } = require("../streak");
 
 // Every query filters on user_id, so a user can only ever see or change their own rows.
@@ -161,7 +162,35 @@ async function taskBelongsToUser(taskId, userId) {
   return rowCount === 1;
 }
 
+// Minutes per day and category for the last `days` days in Brisbane time, starting at midnight
+// of the first day. Days with no sessions are still returned (with 0 minutes), so gaps show up.
+async function getReport(userId, days) {
+  const { rows } = await pool.query(
+    `SELECT d::date AS day, s.category, COALESCE(SUM(s.minutes), 0)::int AS minutes
+     FROM generate_series(${TODAY} - ($2::int - 1), ${TODAY}, interval '1 day') AS d
+     LEFT JOIN sessions s
+       ON s.user_id = $1 AND (s.started_at AT TIME ZONE 'Australia/Brisbane')::date = d::date
+     GROUP BY d, s.category
+     ORDER BY d`,
+    [userId, days]
+  );
+
+  // One entry per day: { day, study, reading, work, journal }, plus totals per category
+  const byDay = new Map();
+  const totals = Object.fromEntries(CATEGORIES.map((c) => [c, 0]));
+  for (const r of rows) {
+    const day = toIsoDate(r.day);
+    if (!byDay.has(day)) byDay.set(day, { day, ...Object.fromEntries(CATEGORIES.map((c) => [c, 0])) });
+    if (r.category) {
+      byDay.get(day)[r.category] += r.minutes;
+      totals[r.category] += r.minutes;
+    }
+  }
+  return { days: [...byDay.values()], totals };
+}
+
 module.exports = {
+  getReport,
   getAllSessions,
   insertSession,
   deleteSession,

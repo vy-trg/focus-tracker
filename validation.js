@@ -69,8 +69,15 @@ function validateTaskUpdate({ done, title } = {}) {
   return errors;
 }
 
+// Report range from the query string: day, week or month -> number of days. Anything else -> null (400).
+const RANGES = { day: 1, week: 7, month: 30 };
+function parseRange(raw) {
+  return Object.hasOwn(RANGES, raw) ? RANGES[raw] : null;
+}
+
 module.exports = {
   CATEGORIES,
+  parseRange,
   parseId,
   validateSession,
   validateTask,
