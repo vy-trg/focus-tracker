@@ -1,201 +1,702 @@
-// Test tip: change to 10 while testing, set back to 25 * 60 before deploying
-const FOCUS_SECONDS = 25 * 60;
+// Focus Tracker in the browser: timer with breaks, presets, tasks, insights and history.
+// Talks to the API with fetch; every request is answered only with the logged-in user's data.
 
-let remaining = FOCUS_SECONDS; // seconds left
-let endAt = null;              // timestamp (ms) when the session ends
-let timerId = null;            // null = timer is not running
+// ---------- Settings (saved in this browser) ----------
+const PRESETS = {
+  classic: { focus: 25, short: 5, long: 15, name: "Classic", hint: "Study" },
+  coding: { focus: 50, short: 10, long: 20, name: "Coding", hint: "Writing" },
+  deep: { focus: 90, short: 20, long: 30, name: "Deep work", hint: "Big tasks" },
+  sprint: { focus: 15, short: 3, long: 10, name: "Sprint", hint: "Get started" },
+};
+const DEFAULTS = { preset: "classic", ...PRESETS.classic, every: 4, sound: true, notify: false, auto: false };
 
-const labelInput = document.getElementById("label-input");
-const timeDisplay = document.getElementById("time-display");
-const message = document.getElementById("message");
-const startBtn = document.getElementById("start-btn");
-const pauseBtn = document.getElementById("pause-btn");
-const resetBtn = document.getElementById("reset-btn");
-const sessionList = document.getElementById("session-list");
+// localStorage can throw (private mode, blocked storage), so every access is wrapped
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("ft-settings"));
+    return { ...DEFAULTS, ...saved };
+  } catch {
+    return { ...DEFAULTS };
+  }
+}
+function saveSettings() {
+  try {
+    localStorage.setItem("ft-settings", JSON.stringify(settings));
+  } catch {
+    // Not saved: the timer still works for this visit
+  }
+}
+let settings = loadSettings();
 
-function showMessage(text, kind = "") {
-  message.textContent = text;
-  message.className = kind;
+// Test mode, only on your own computer: http://localhost:3000/?fast counts seconds instead of minutes
+const FAST = location.hostname === "localhost" && new URLSearchParams(location.search).has("fast");
+const UNIT = FAST ? 1000 : 60 * 1000;
+
+// ---------- Elements ----------
+const $ = (id) => document.getElementById(id);
+const els = {
+  tabs: document.querySelectorAll(".tab"),
+  label: $("label-input"),
+  taskSelect: $("task-select"),
+  category: $("category"),
+  time: $("time-display"),
+  ofTotal: $("of-total"),
+  status: $("status"),
+  ring: $("ring-progress"),
+  roundDots: $("round-dots"),
+  roundText: $("round-text"),
+  start: $("start-btn"),
+  startIcon: $("start-icon"),
+  reset: $("reset-btn"),
+  skip: $("skip-btn"),
+  message: $("message"),
+  completePanel: $("complete-panel"),
+  completeText: $("complete-text"),
+  ratingButtons: document.querySelectorAll(".rating button"),
+  startBreak: $("start-break-btn"),
+  skipBreak: $("skip-break-btn"),
+  presets: document.querySelector(".presets"),
+  setFocus: $("set-focus"),
+  setShort: $("set-short"),
+  setLong: $("set-long"),
+  setEvery: $("set-every"),
+  setSound: $("set-sound"),
+  setAuto: $("set-auto"),
+  setNotify: $("set-notify"),
+  startLabel: $("start-label"),
+  navTime: $("nav-time"),
+  navStart: $("nav-start"),
+  navIcon: $("nav-icon"),
+  showMore: $("show-more"),
+  taskForm: $("task-form"),
+  taskTitle: $("task-title"),
+  taskEstimate: $("task-estimate"),
+  taskList: $("task-list"),
+  filterButtons: document.querySelectorAll(".filter button"),
+  sessionList: $("session-list"),
+  toast: $("toast"),
+  toastText: $("toast-text"),
+  toastUndo: $("toast-undo"),
+};
+
+// ---------- Timer state ----------
+// endAt is a timestamp, so the countdown stays right even when the browser slows down a background tab.
+let mode = "focus"; // "focus" | "short" | "long"
+let round = 0; // focus sessions finished in this cycle (resets after a long break)
+let endAt = null; // when running: the time it ends
+let remainingMs = minutesFor("focus") * UNIT; // when paused or stopped
+let tick = null;
+let lastSessionId = null; // the session the rating buttons apply to
+
+const RING_LENGTH = 2 * Math.PI * 52;
+els.ring.style.strokeDasharray = RING_LENGTH;
+
+function minutesFor(m) {
+  return Number(settings[m]);
+}
+function format(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+function isRunning() {
+  return endAt !== null;
+}
+function currentRemaining() {
+  return isRunning() ? endAt - Date.now() : remainingMs;
 }
 
-function formatTime(seconds) {
-  const mins = String(Math.floor(seconds / 60)).padStart(2, "0");
-  const secs = String(seconds % 60).padStart(2, "0");
-  return `${mins}:${secs}`;
+function render() {
+  const total = minutesFor(mode) * UNIT;
+  const left = currentRemaining();
+  els.time.textContent = format(left);
+  els.ofTotal.textContent = `of ${format(total)}`;
+  els.ring.style.strokeDashoffset = RING_LENGTH * (1 - Math.min(1, Math.max(0, (total - left) / total)));
+
+  const label = { focus: "Focus", short: "Short break", long: "Long break" }[mode];
+  const ready = { focus: "Ready to focus", short: "Ready for a short break", long: "Ready for a long break" }[mode];
+  els.status.textContent = isRunning()
+    ? mode === "focus"
+      ? "Focusing"
+      : "On a break"
+    : left < total
+      ? "Paused"
+      : ready;
+  document.title = isRunning() ? `${format(left)} · ${label}` : "Focus Tracker";
+
+  const icon = isRunning() ? '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
+  const action = isRunning() ? "Pause" : left < total ? "Resume" : "Start";
+  els.startIcon.innerHTML = icon;
+  els.startLabel.textContent = action;
+  // The small timer in the bottom bar (phones) mirrors the big one
+  els.navTime.textContent = format(left);
+  els.navIcon.innerHTML = icon;
+  els.navStart.setAttribute("aria-label", action);
+
+  document.body.dataset.mode = mode;
+  els.tabs.forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.mode === mode)));
+
+  const every = Number(settings.every);
+  els.roundDots.innerHTML = "";
+  for (let i = 0; i < every; i++) {
+    const dot = document.createElement("i");
+    if (i < round) dot.className = "done";
+    els.roundDots.append(dot);
+  }
+  els.roundText.textContent = `Session ${Math.min(round + 1, every)} of ${every}`;
 }
 
-function renderTime() {
-  timeDisplay.textContent = formatTime(remaining);
-  // Show the countdown in the browser tab too
-  document.title = timerId !== null ? `${formatTime(remaining)} · Focus Tracker` : "Focus Tracker";
+function setMode(next) {
+  stop();
+  mode = next;
+  remainingMs = minutesFor(mode) * UNIT;
+  render();
 }
 
-function updateButtons() {
-  const running = timerId !== null;
-  startBtn.disabled = running;
-  pauseBtn.disabled = !running;
-  labelInput.disabled = running;
-  startBtn.textContent = remaining < FOCUS_SECONDS && !running ? "Resume" : "Start";
-}
-
-// --- TIMER ---
-// Count down to a fixed end time instead of subtracting 1 each second.
-// Phones slow down timers in background tabs, so "remaining--" would fall
-// behind; working it out from the clock stays correct.
-
-function startTimer() {
-  if (timerId !== null) return; // already running
-  if (labelInput.value.trim() === "") {
-    showMessage("Please type what you're focusing on first.", "error");
-    labelInput.focus();
+function start() {
+  if (mode === "focus" && els.label.value.trim() === "") {
+    showMessage("What are you working on? Type it above, then press Start.", true);
+    els.label.focus();
     return;
   }
   showMessage("");
-  endAt = Date.now() + remaining * 1000;
-  timerId = setInterval(tick, 250);
-  updateButtons();
-  renderTime();
+  askNotificationPermission();
+  els.completePanel.hidden = true;
+  endAt = Date.now() + remainingMs;
+  tick = setInterval(onTick, 250);
+  render();
 }
 
-function tick() {
-  remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
-  renderTime();
-  if (remaining === 0) {
-    pauseTimer();
-    finishSession();
+function pause() {
+  remainingMs = currentRemaining();
+  stop();
+  render();
+}
+
+function stop() {
+  clearInterval(tick);
+  tick = null;
+  endAt = null;
+}
+
+function onTick() {
+  if (currentRemaining() <= 0) {
+    finish();
+  } else {
+    render();
   }
 }
 
-function pauseTimer() {
-  clearInterval(timerId);
-  timerId = null;
-  updateButtons();
-  renderTime();
+async function finish() {
+  stop();
+  beep();
+  notify(mode === "focus" ? "Focus session done. Time for a break!" : "Break's over. Ready to focus?");
+  if (mode === "focus") {
+    round += 1;
+    const minutes = minutesFor("focus");
+    await saveSession(minutes);
+    const next = round >= Number(settings.every) ? "long" : "short";
+    mode = next;
+    remainingMs = minutesFor(next) * UNIT;
+    els.startBreak.textContent = `Start ${minutesFor(next)} min ${next === "long" ? "long " : ""}break`;
+    els.completeText.textContent = `Nice work on “${els.label.value.trim()}”. Take a breather, you earned it.`;
+    els.ratingButtons.forEach((b) => b.setAttribute("aria-pressed", "false"));
+    els.completePanel.hidden = false;
+    render();
+    if (settings.auto) start();
+  } else {
+    if (mode === "long") round = 0;
+    mode = "focus";
+    remainingMs = minutesFor("focus") * UNIT;
+    showMessage("Break's over. Press Start when you're ready.");
+    render();
+  }
 }
 
-function resetTimer() {
-  pauseTimer();
-  remaining = FOCUS_SECONDS;
-  renderTime();
-  updateButtons();
+function skip() {
+  els.completePanel.hidden = true;
+  if (mode === "focus") {
+    // Skipping focus does not save a session; just move on to the break
+    setMode(round + 1 >= Number(settings.every) ? "long" : "short");
+  } else {
+    if (mode === "long") round = 0;
+    setMode("focus");
+  }
 }
 
-startBtn.addEventListener("click", startTimer);
-pauseBtn.addEventListener("click", pauseTimer);
-resetBtn.addEventListener("click", resetTimer);
-
-// Pressing Enter in the label box starts the timer
-labelInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") startTimer();
-});
-
-// --- API CALLS ---
-
-async function finishSession() {
-  // Server only accepts 1–180 minutes, so a 10-second test still saves as 1
-  const minutes = Math.max(1, Math.round(FOCUS_SECONDS / 60));
+// A short two-note chime made in the browser (no audio file needed)
+function beep() {
+  if (!settings.sound) return;
   try {
-    const res = await fetch("/api/sessions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ label: labelInput.value.trim(), minutes }),
+    const ctx = new AudioContext();
+    [660, 880].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime + i * 0.25);
+      gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + i * 0.25 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.25 + 0.4);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(ctx.currentTime + i * 0.25);
+      osc.stop(ctx.currentTime + i * 0.25 + 0.45);
     });
-    if (res.status === 401) {
-      window.location.href = "/login";
-      return;
-    }
-    if (!res.ok) throw new Error(`Couldn't save the session (error ${res.status}).`);
-    showMessage("Session saved. Nice work!", "ok");
-    resetTimer();
-    loadSessions();
-    loadStats();
-  } catch (err) {
-    showMessage(err.message, "error");
+  } catch {
+    // No sound support: the message and title still show the timer ended
   }
 }
+
+// Browser notification when the timer ends while you're in another tab (only if you turned it on)
+function askNotificationPermission() {
+  if (settings.notify && "Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+}
+function notify(text) {
+  if (!settings.notify || !document.hidden) return;
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification("Focus Tracker", { body: text });
+  }
+}
+
+function showMessage(text, isError = false) {
+  els.message.textContent = text;
+  els.message.classList.toggle("error", isError);
+}
+
+// ---------- Presets and settings ----------
+function renderPresets() {
+  els.presets.innerHTML = "";
+  for (const [key, p] of Object.entries(PRESETS)) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "preset";
+    btn.setAttribute("aria-pressed", String(settings.preset === key));
+    btn.innerHTML = `<b>${p.focus}/${p.short}</b><span></span>`;
+    btn.querySelector("span").textContent = `${p.name} · ${p.hint}`;
+    btn.addEventListener("click", () => applyPreset(key));
+    els.presets.append(btn);
+  }
+}
+
+function applyPreset(key) {
+  if (isRunning() && !confirmChange()) return;
+  settings = { ...settings, preset: key, ...pick(PRESETS[key], ["focus", "short", "long"]) };
+  saveSettings();
+  fillSettingsForm();
+  renderPresets();
+  setMode(mode);
+}
+
+function confirmChange() {
+  showMessage("The timer is running. Pause it first, then change the length.", true);
+  return false;
+}
+
+function pick(obj, keys) {
+  return Object.fromEntries(keys.map((k) => [k, obj[k]]));
+}
+
+function fillSettingsForm() {
+  els.setFocus.value = settings.focus;
+  els.setShort.value = settings.short;
+  els.setLong.value = settings.long;
+  els.setEvery.value = settings.every;
+  els.setSound.checked = settings.sound;
+  els.setAuto.checked = settings.auto;
+  els.setNotify.checked = settings.notify;
+}
+
+function readNumber(input, min, max, fallback) {
+  const n = Number(input.value);
+  return Number.isInteger(n) && n >= min && n <= max ? n : fallback;
+}
+
+function onSettingsChange() {
+  settings = {
+    ...settings,
+    preset: "custom",
+    focus: readNumber(els.setFocus, 1, 180, settings.focus),
+    short: readNumber(els.setShort, 1, 60, settings.short),
+    long: readNumber(els.setLong, 1, 60, settings.long),
+    every: readNumber(els.setEvery, 2, 8, settings.every),
+    sound: els.setSound.checked,
+    auto: els.setAuto.checked,
+    notify: els.setNotify.checked,
+  };
+  // If the numbers match a preset, highlight it again
+  for (const [key, p] of Object.entries(PRESETS)) {
+    if (p.focus === settings.focus && p.short === settings.short && p.long === settings.long) settings.preset = key;
+  }
+  saveSettings();
+  renderPresets();
+  if (settings.notify) askNotificationPermission();
+  if (!isRunning()) setMode(mode);
+}
+
+// ---------- API helper ----------
+// 401 means the login session ended: go to the login page
+async function api(path, options = {}) {
+  let res;
+  try {
+    res = await fetch(path, {
+      ...options,
+      headers: options.body ? { "Content-Type": "application/json" } : undefined,
+    });
+  } catch {
+    throw new Error("Can't reach the server. Check your internet connection.");
+  }
+  if (res.status === 401) {
+    location.href = "/login";
+    throw new Error("Not logged in");
+  }
+  if (res.status === 429) {
+    throw new Error("Too many requests in a short time. Wait a minute and try again.");
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    // 400 errors explain what to fix; anything else is our fault, not yours
+    const msg = data.errors
+      ? data.errors.map((e) => e.message).join(", ")
+      : "The server had a problem. Try again in a moment.";
+    throw new Error(msg);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+// ---------- Sessions ----------
+// If saving fails (e.g. Wi-Fi drops), the session is kept here and sent again
+// when the connection comes back, so a finished focus block is never lost.
+let unsaved = null;
+
+async function saveSession(minutes) {
+  unsaved = {
+    label: els.label.value.trim(),
+    minutes,
+    category: els.category.value,
+    task_id: els.taskSelect.value ? Number(els.taskSelect.value) : null,
+  };
+  await sendUnsaved();
+}
+
+async function sendUnsaved() {
+  if (!unsaved) return;
+  try {
+    const saved = await api("/api/sessions", { method: "POST", body: JSON.stringify(unsaved) });
+    showMessage(`Saved ${unsaved.minutes} minutes. Nice!`);
+    unsaved = null;
+    lastSessionId = saved.id;
+    refreshAll();
+  } catch (err) {
+    lastSessionId = null;
+    showMessage(`Couldn't save this session yet. ${err.message} We'll keep it and try again.`, true);
+    setTimeout(sendUnsaved, 15000);
+  }
+}
+window.addEventListener("online", sendUnsaved);
+
+async function rate(value) {
+  if (!lastSessionId) return;
+  els.ratingButtons.forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.rating) === value)));
+  try {
+    await api(`/api/sessions/${lastSessionId}`, { method: "PATCH", body: JSON.stringify({ rating: value }) });
+    loadSessions();
+  } catch (err) {
+    showMessage(err.message, true);
+  }
+}
+
+const CATEGORY_NAMES = { study: "Study", reading: "Reading", work: "Work", journal: "Journal" };
+const RATING_NAMES = ["", "Scattered", "Okay", "Good", "Great", "In flow"];
+
+// The log starts with 5 rows; "Show more" adds 10 at a time
+let sessionsShown = 5;
+let allSessions = [];
 
 async function loadSessions() {
   try {
-    const res = await fetch("/api/sessions");
-    if (res.status === 401) {
-      window.location.href = "/login";
-      return;
-    }
-    if (!res.ok) throw new Error();
-    const sessions = await res.json();
-
-    sessionList.innerHTML = ""; // clear old list
-    if (sessions.length === 0) {
-      sessionList.innerHTML = '<li class="empty">No sessions yet. Start your first one above.</li>';
-      return;
-    }
-
-    sessions.forEach((s) => {
-      const li = document.createElement("li");
-
-      // textContent (not innerHTML) so a label like "<script>" shows as plain text
-      const info = document.createElement("div");
-      info.className = "info";
-      const label = document.createElement("span");
-      label.className = "label";
-      label.textContent = s.label;
-      const meta = document.createElement("span");
-      meta.className = "meta";
-      const when = new Date(s.started_at).toLocaleString("en-AU", {
-        timeZone: "Australia/Brisbane",
-        dateStyle: "medium",
-        timeStyle: "short",
-      });
-      meta.textContent = `${s.minutes} min · ${when}`;
-      info.append(label, meta);
-
-      const delBtn = document.createElement("button");
-      delBtn.textContent = "Delete";
-      delBtn.setAttribute("aria-label", `Delete session "${s.label}"`);
-      delBtn.addEventListener("click", () => deleteSession(s.id));
-
-      li.append(info, delBtn);
-      sessionList.appendChild(li);
-    });
-  } catch {
-    sessionList.innerHTML = '<li class="empty">Couldn\'t load sessions. Refresh to try again.</li>';
+    allSessions = await api("/api/sessions");
+    renderSessions();
+  } catch (err) {
+    showMessage(`Couldn't load your session log. ${err.message}`, true);
   }
 }
 
-async function deleteSession(id) {
+function renderSessions() {
+  els.sessionList.removeAttribute("aria-busy");
+  els.sessionList.innerHTML = "";
+  els.showMore.hidden = allSessions.length <= sessionsShown;
+  if (allSessions.length === 0) {
+    els.sessionList.innerHTML = '<li class="empty">No sessions yet. Finish a focus block and it shows up here.</li>';
+    return;
+  }
+  for (const s of allSessions.slice(0, sessionsShown)) {
+    const li = document.createElement("li");
+    li.className = "session";
+    li.innerHTML = `
+      <span class="tag"></span>
+      <div class="session-main"><div class="session-title"></div><div class="session-meta"></div></div>
+      <span class="mins"></span>
+      <button class="icon-btn" type="button" aria-label="Delete session">×</button>`;
+    const tag = li.querySelector(".tag");
+    tag.classList.add(`tag-${s.category}`);
+    tag.textContent = CATEGORY_NAMES[s.category] || s.category;
+    // textContent, never innerHTML, for anything the user typed
+    li.querySelector(".session-title").textContent = s.label;
+    const when = new Date(s.started_at).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
+    const parts = [when];
+    if (s.task_title) parts.push(`Task: ${s.task_title}`);
+    if (s.rating) parts.push(RATING_NAMES[s.rating]);
+    li.querySelector(".session-meta").textContent = parts.join(" · ");
+    li.querySelector(".mins").textContent = `${s.minutes}m`;
+    li.querySelector("button").addEventListener("click", () =>
+      deleteWithUndo(li, "Session deleted", () => api(`/api/sessions/${s.id}`, { method: "DELETE", keepalive: true })),
+    );
+    els.sessionList.append(li);
+  }
+}
+
+// ---------- Tasks ----------
+let tasks = [];
+let filter = "open";
+
+async function loadTasks() {
   try {
-    const res = await fetch(`/api/sessions/${id}`, { method: "DELETE" });
-    if (res.status === 401) {
-      window.location.href = "/login";
-      return;
-    }
-    if (!res.ok && res.status !== 404) throw new Error();
-    loadSessions();
-    loadStats();
-  } catch {
-    showMessage("Couldn't delete that session. Try again.", "error");
+    tasks = await api("/api/tasks");
+    els.taskList.removeAttribute("aria-busy");
+    renderTasks();
+    renderTaskSelect();
+  } catch (err) {
+    showMessage(`Couldn't load your tasks. ${err.message}`, true);
   }
 }
 
+function renderTasks() {
+  const shown = tasks.filter((t) => (filter === "done" ? t.done : !t.done));
+  els.taskList.innerHTML = "";
+  if (shown.length === 0) {
+    els.taskList.innerHTML =
+      filter === "done"
+        ? '<li class="empty">Nothing ticked off yet.</li>'
+        : '<li class="empty">No tasks yet. Add what you\'re working on, then press ▶ to focus on it.</li>';
+    return;
+  }
+  for (const t of shown) {
+    const li = document.createElement("li");
+    li.className = "task" + (t.done ? " done" : "") + (String(t.id) === els.taskSelect.value ? " current" : "");
+    li.innerHTML = `
+      <input type="checkbox">
+      <div><div class="task-title"></div><div class="pips"></div></div>
+      <button class="icon-btn play" type="button"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+      <button class="icon-btn" type="button">×</button>`;
+    const checkbox = li.querySelector("input");
+    checkbox.checked = t.done;
+    checkbox.setAttribute("aria-label", `Done: ${t.title}`);
+    li.querySelector(".task-title").textContent = t.title;
+
+    const pips = li.querySelector(".pips");
+    for (let i = 0; i < t.estimate; i++) {
+      const pip = document.createElement("i");
+      if (i < t.pomodoros) pip.className = "on";
+      pips.append(pip);
+    }
+    const count = document.createElement("span");
+    count.textContent = t.pomodoros >= t.estimate ? ` ${t.pomodoros}/${t.estimate} done` : ` ${t.pomodoros}/${t.estimate}`;
+    if (t.pomodoros >= t.estimate) count.className = "reached";
+    pips.append(count);
+
+    const [playBtn, deleteBtn] = li.querySelectorAll("button");
+    playBtn.setAttribute("aria-label", `Focus on ${t.title}`);
+    playBtn.hidden = t.done;
+    deleteBtn.setAttribute("aria-label", `Delete ${t.title}`);
+
+    checkbox.addEventListener("change", () => toggleTask(t, checkbox.checked));
+    playBtn.addEventListener("click", () => focusOnTask(t));
+    deleteBtn.addEventListener("click", () =>
+      deleteWithUndo(li, "Task deleted", async () => {
+        await api(`/api/tasks/${t.id}`, { method: "DELETE", keepalive: true });
+        await loadTasks();
+      }),
+    );
+    els.taskList.append(li);
+  }
+}
+
+function renderTaskSelect() {
+  const current = els.taskSelect.value;
+  els.taskSelect.innerHTML = '<option value="">No task</option>';
+  for (const t of tasks.filter((t) => !t.done)) {
+    const opt = document.createElement("option");
+    opt.value = t.id;
+    opt.textContent = t.title;
+    els.taskSelect.append(opt);
+  }
+  els.taskSelect.value = tasks.some((t) => String(t.id) === current && !t.done) ? current : "";
+}
+
+function focusOnTask(t) {
+  els.taskSelect.value = t.id;
+  els.label.value = t.title.slice(0, 60);
+  if (mode !== "focus" && !isRunning()) setMode("focus");
+  renderTasks();
+  els.label.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+async function toggleTask(t, done) {
+  try {
+    await api(`/api/tasks/${t.id}`, { method: "PATCH", body: JSON.stringify({ done }) });
+    await loadTasks();
+  } catch (err) {
+    showMessage(err.message, true);
+  }
+}
+
+async function addTask(event) {
+  event.preventDefault();
+  const title = els.taskTitle.value.trim();
+  if (!title) return;
+  try {
+    await api("/api/tasks", {
+      method: "POST",
+      body: JSON.stringify({ title, estimate: Number(els.taskEstimate.value) }),
+    });
+    els.taskTitle.value = "";
+    filter = "open";
+    els.filterButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.filter === "open")));
+    await loadTasks();
+  } catch (err) {
+    showMessage(err.message, true);
+  }
+}
+
+// ---------- Delete with Undo ----------
+// The row disappears at once, but the DELETE request waits 5 seconds.
+// Undo inside those 5 seconds simply puts the row back; nothing was deleted on the server.
+let pendingDelete = null;
+
+function deleteWithUndo(row, text, doDelete) {
+  if (pendingDelete) pendingDelete.commit(); // only one undo at a time
+  row.hidden = true;
+  els.toastText.textContent = text;
+  els.toast.hidden = false;
+
+  const timer = setTimeout(() => entry.commit(), 5000);
+  const entry = {
+    commit: async () => {
+      clearTimeout(timer);
+      if (pendingDelete === entry) {
+        pendingDelete = null;
+        els.toast.hidden = true;
+      }
+      try {
+        await doDelete();
+        refreshAll();
+      } catch (err) {
+        row.hidden = false;
+        showMessage(`Couldn't delete that. ${err.message}`, true);
+      }
+    },
+    undo: () => {
+      clearTimeout(timer);
+      pendingDelete = null;
+      els.toast.hidden = true;
+      row.hidden = false;
+    },
+  };
+  pendingDelete = entry;
+}
+
+// ---------- Insights ----------
 async function loadStats() {
   try {
-    const res = await fetch("/api/stats");
-    if (res.status === 401) {
-      window.location.href = "/login";
-      return;
-    }
-    if (!res.ok) throw new Error();
-    const stats = await res.json();
-    document.getElementById("today-count").textContent = stats.today.count;
-    document.getElementById("today-minutes").textContent = stats.today.total_minutes;
-    document.getElementById("all-minutes").textContent = stats.allTime.total_minutes;
-  } catch {
-    // Leave the "–" placeholders if stats can't load
+    const stats = await api("/api/stats");
+    $("today-minutes").textContent = stats.today.total_minutes;
+    $("today-count").textContent = stats.today.count;
+    $("streak").textContent = stats.streak;
+    $("all-minutes").textContent = stats.allTime.total_minutes;
+    $("all-count").textContent = stats.allTime.count;
+
+    const weekMinutes = stats.week.reduce((sum, d) => sum + d.minutes, 0);
+    $("week-total").textContent = `${Math.floor(weekMinutes / 60)}h ${weekMinutes % 60}m`;
+
+    const max = Math.max(60, ...stats.week.map((d) => d.minutes));
+    const bars = $("week-bars");
+    bars.innerHTML = "";
+    stats.week.forEach((d, i) => {
+      const bar = document.createElement("div");
+      bar.className = "bar" + (i === stats.week.length - 1 ? " today" : "");
+      const dayName = new Date(`${d.day}T00:00:00`).toLocaleDateString([], { weekday: "short" });
+      bar.innerHTML = '<div class="bar-fill"></div><span></span>';
+      bar.querySelector(".bar-fill").style.height = `${Math.round((d.minutes / max) * 100)}%`;
+      bar.querySelector("span").textContent = dayName;
+      bar.title = `${dayName}: ${d.minutes} min`;
+      bars.append(bar);
+    });
+
+    $("insight").textContent =
+      stats.bestHour === null
+        ? "Finish a few sessions to see when you focus best."
+        : `You focus most around ${formatHour(stats.bestHour)}. Schedule hard tasks then.`;
+  } catch (err) {
+    showMessage(`Couldn't load your insights. ${err.message}`, true);
   }
 }
 
-// Run once when the page opens
-renderTime();
-updateButtons();
-loadSessions();
-loadStats();
+function formatHour(h) {
+  const suffix = h < 12 ? "am" : "pm";
+  return `${h % 12 === 0 ? 12 : h % 12}${suffix}`;
+}
+
+function refreshAll() {
+  loadSessions();
+  loadStats();
+  loadTasks();
+}
+
+// ---------- Wire up ----------
+els.start.addEventListener("click", () => (isRunning() ? pause() : start()));
+els.navStart.addEventListener("click", () => (isRunning() ? pause() : start()));
+els.showMore.addEventListener("click", () => {
+  sessionsShown += 10;
+  renderSessions();
+});
+els.reset.addEventListener("click", () => {
+  els.completePanel.hidden = true;
+  setMode(mode);
+});
+els.skip.addEventListener("click", skip);
+els.tabs.forEach((tab) =>
+  tab.addEventListener("click", () => {
+    if (isRunning()) return confirmChange();
+    els.completePanel.hidden = true;
+    setMode(tab.dataset.mode);
+  }),
+);
+els.ratingButtons.forEach((b) => b.addEventListener("click", () => rate(Number(b.dataset.rating))));
+els.startBreak.addEventListener("click", start);
+els.skipBreak.addEventListener("click", () => {
+  els.completePanel.hidden = true;
+  setMode("focus");
+});
+els.taskSelect.addEventListener("change", () => {
+  const t = tasks.find((t) => String(t.id) === els.taskSelect.value);
+  if (t && els.label.value.trim() === "") els.label.value = t.title.slice(0, 60);
+  renderTasks();
+});
+els.taskForm.addEventListener("submit", addTask);
+els.filterButtons.forEach((b) =>
+  b.addEventListener("click", () => {
+    filter = b.dataset.filter;
+    els.filterButtons.forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    renderTasks();
+  }),
+);
+els.toastUndo.addEventListener("click", () => pendingDelete && pendingDelete.undo());
+[els.setFocus, els.setShort, els.setLong, els.setEvery, els.setSound, els.setAuto, els.setNotify].forEach((input) =>
+  input.addEventListener("change", onSettingsChange),
+);
+// Leaving the page during the 5-second undo window still deletes
+window.addEventListener("pagehide", () => pendingDelete && pendingDelete.commit());
+
+fillSettingsForm();
+renderPresets();
+render();
+refreshAll();

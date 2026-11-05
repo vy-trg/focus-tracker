@@ -1,3 +1,4 @@
+const path = require("node:path");
 const express = require("express");
 const helmet = require("helmet");
 const { rateLimit } = require("express-rate-limit");
@@ -8,7 +9,13 @@ const bcrypt = require("bcryptjs");
 const db = require("./db/queries");
 const { pool } = require("./db/pool");
 const { passport, requireAuth } = require("./auth");
-const { validateSession, parseId } = require("./validation");
+const {
+  validateSession,
+  validateTask,
+  validateTaskUpdate,
+  validateRating,
+  parseId,
+} = require("./validation");
 
 const app = express();
 
@@ -28,6 +35,12 @@ app.use(express.urlencoded({ extended: false, limit: "10kb" }));
 
 // Serve browser files (timer.js, style.css) from the public folder
 app.use(express.static("public"));
+// The DM Sans font files come from an npm package and are served by the app itself,
+// so the page needs no Google Fonts request and the CSP can stay strict.
+app.use(
+  "/fonts/dm-sans",
+  express.static(path.join(__dirname, "node_modules/@fontsource-variable/dm-sans/files"), { maxAge: "30d" })
+);
 
 // --- LOGIN SESSIONS ---
 // The login session lives in Postgres (table user_sessions), so users stay
@@ -114,7 +127,11 @@ app.post("/logout", (req, res, next) => {
 
 // --- EJS VIEW ROUTES ---
 // The page is a shell; timer.js loads sessions and stats from the API.
-app.get("/", requireAuth, (req, res) => {
+// Logged out: the landing page. Logged in: the timer app.
+app.get("/", (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.render("landing");
+  }
   res.render("index", { username: req.user.username });
 });
 
@@ -122,6 +139,7 @@ app.get("/", requireAuth, (req, res) => {
 // Everything under /api/sessions and /api/stats needs a logged-in user
 app.use("/api/sessions", requireAuth);
 app.use("/api/stats", requireAuth);
+app.use("/api/tasks", requireAuth);
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true });
@@ -138,15 +156,47 @@ app.get("/api/sessions", async (req, res) => {
   }
 });
 
-// 2. POST /api/sessions: save a session for this user
+// 2. POST /api/sessions: save a finished focus session for this user
 app.post("/api/sessions", async (req, res) => {
   try {
     const errors = validateSession(req.body);
     if (errors.length > 0) {
       return res.status(400).json({ errors });
     }
-    const session = await db.insertSession(req.user.id, req.body.label.trim(), Number(req.body.minutes));
+    const taskId = req.body.task_id == null ? null : Number(req.body.task_id);
+    // A task id from the browser can't be trusted: it must be one of THIS user's tasks
+    if (taskId !== null && !(await db.taskBelongsToUser(taskId, req.user.id))) {
+      return res.status(400).json({ errors: [{ field: "task_id", message: "Unknown task" }] });
+    }
+    const session = await db.insertSession(req.user.id, {
+      label: req.body.label.trim(),
+      minutes: Number(req.body.minutes),
+      category: req.body.category || "study",
+      taskId,
+    });
     res.status(201).json(session); // includes the new id
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server Error" });
+  }
+});
+
+// PATCH /api/sessions/:id: save "How focused did you feel?" (1-5)
+app.patch("/api/sessions/:id", async (req, res) => {
+  try {
+    const sessionId = parseId(req.params.id);
+    if (sessionId === null) {
+      return res.status(400).json({ error: "Id must be a positive whole number" });
+    }
+    const errors = validateRating(req.body.rating);
+    if (errors.length > 0) {
+      return res.status(400).json({ errors });
+    }
+    const rowCount = await db.rateSession(sessionId, req.user.id, req.body.rating);
+    if (rowCount === 0) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+    res.status(204).send();
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server Error" });
@@ -183,8 +233,76 @@ app.get("/api/stats", async (req, res) => {
   }
 });
 
-// Render (and most hosts) set PORT for you; 3000 is the local default.
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Focus Tracker app listening on port ${PORT}!`);
+// --- TASKS (to-do list) ---
+app.get("/api/tasks", async (req, res) => {
+  try {
+    res.json(await db.getTasks(req.user.id));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server Error" });
+  }
 });
+
+app.post("/api/tasks", async (req, res) => {
+  try {
+    const errors = validateTask(req.body);
+    if (errors.length > 0) {
+      return res.status(400).json({ errors });
+    }
+    const task = await db.insertTask(req.user.id, req.body.title.trim(), Number(req.body.estimate ?? 1));
+    res.status(201).json(task);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server Error" });
+  }
+});
+
+app.patch("/api/tasks/:id", async (req, res) => {
+  try {
+    const taskId = parseId(req.params.id);
+    if (taskId === null) {
+      return res.status(400).json({ error: "Id must be a positive whole number" });
+    }
+    const errors = validateTaskUpdate(req.body);
+    if (errors.length > 0) {
+      return res.status(400).json({ errors });
+    }
+    const title = typeof req.body.title === "string" ? req.body.title.trim() : undefined;
+    const task = await db.updateTask(taskId, req.user.id, { done: req.body.done, title });
+    if (!task) {
+      return res.status(404).json({ error: "Task not found" }); // not found OR not yours
+    }
+    res.json(task);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server Error" });
+  }
+});
+
+app.delete("/api/tasks/:id", async (req, res) => {
+  try {
+    const taskId = parseId(req.params.id);
+    if (taskId === null) {
+      return res.status(400).json({ error: "Id must be a positive whole number" });
+    }
+    const rowCount = await db.deleteTask(taskId, req.user.id);
+    if (rowCount === 0) {
+      return res.status(404).json({ error: "Task not found" });
+    }
+    res.status(204).send();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server Error" });
+  }
+});
+
+// Render (and most hosts) set PORT for you; 3000 is the local default.
+// Only start the server when run directly (node app.js), not when a test imports the app.
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Focus Tracker app listening on port ${PORT}!`);
+  });
+}
+
+module.exports = app;

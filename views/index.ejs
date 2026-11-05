@@ -6,42 +6,184 @@
   <title>Focus Tracker</title>
   <link rel="stylesheet" href="/style.css">
 </head>
-<body>
-  <main>
+<body class="app" data-mode="focus">
+  <div class="shell">
     <header class="topbar">
-      <h1>Focus Tracker</h1>
+      <span class="brand">FOCUS/TRACKER</span>
       <div class="who">
-        <span>Logged in as <strong><%= username %></strong></span>
-        <form method="post" action="/logout"><button type="submit">Log out</button></form>
+        <span>Hi, <strong><%= username %></strong></span>
+        <form method="post" action="/logout"><button class="btn btn-ghost btn-small" type="submit">Log out</button></form>
       </div>
     </header>
 
-    <section class="card timer">
-      <label for="label-input">What are you focusing on?</label>
-      <input id="label-input" type="text" maxlength="60" placeholder="e.g. Odin Project Node" autocomplete="off">
-      <p id="time-display" aria-live="off">25:00</p>
-      <div class="buttons">
-        <button id="start-btn" class="primary">Start</button>
-        <button id="pause-btn" disabled>Pause</button>
-        <button id="reset-btn">Reset</button>
-      </div>
-      <p id="message" role="status"></p>
-    </section>
+    <h1 class="visually-hidden">Focus Tracker</h1>
 
-    <section class="card">
-      <h2>Stats</h2>
-      <div class="stats">
-        <div><b id="today-count">–</b><span>sessions today</span></div>
-        <div><b id="today-minutes">–</b><span>minutes today</span></div>
-        <div><b id="all-minutes">–</b><span>minutes all time</span></div>
-      </div>
-    </section>
+    <main class="layout">
+      <!-- ===== Timer ===== -->
+      <section class="timer-device" id="timer" aria-label="Timer">
+        <div class="tabs" role="group" aria-label="Timer mode">
+          <button class="tab" type="button" data-mode="focus" aria-pressed="true">Focus</button>
+          <button class="tab" type="button" data-mode="short" aria-pressed="false">Short break</button>
+          <button class="tab" type="button" data-mode="long" aria-pressed="false">Long break</button>
+        </div>
 
-    <section class="card">
-      <h2>Recent sessions</h2>
-      <ul id="session-list"></ul>
-    </section>
-  </main>
+        <div class="context">
+          <div class="wide">
+            <label class="visually-hidden" for="label-input">Working on</label>
+            <input id="label-input" type="text" maxlength="60" placeholder="What are you working on?" autocomplete="off">
+          </div>
+          <div>
+            <label class="visually-hidden" for="task-select">Task</label>
+            <select id="task-select"><option value="">No task</option></select>
+          </div>
+          <div>
+            <label class="visually-hidden" for="category">Category</label>
+            <select id="category">
+              <option value="study">Study</option>
+              <option value="reading">Reading</option>
+              <option value="work">Work</option>
+              <option value="journal">Journal</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="screen-panel">
+          <div class="ring">
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="ring-track" cx="60" cy="60" r="52"></circle>
+              <circle class="ring-ticks" cx="60" cy="60" r="44"></circle>
+              <circle class="ring-progress" id="ring-progress" cx="60" cy="60" r="52"></circle>
+            </svg>
+            <div class="ring-center">
+              <span class="status-pill" id="status">Ready to focus</span>
+              <p id="time-display" aria-live="off">25:00</p>
+              <span class="of-total" id="of-total">of 25:00</span>
+            </div>
+          </div>
+
+          <div class="rounds">
+            <span class="dots" id="round-dots" aria-hidden="true"></span>
+            <span id="round-text">Session 1 of 4</span>
+          </div>
+
+          <div class="controls">
+            <div class="control">
+              <button class="round-btn" id="reset-btn" type="button" aria-describedby="reset-label">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg>
+              </button>
+              <span class="visually-hidden" id="reset-label">Reset</span>
+            </div>
+            <div class="control">
+              <button class="round-btn big" id="start-btn" type="button" aria-describedby="start-label">
+                <svg viewBox="0 0 24 24" id="start-icon" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+              </button>
+              <span class="visually-hidden" id="start-label">Start</span>
+            </div>
+            <div class="control">
+              <button class="round-btn" id="skip-btn" type="button" aria-describedby="skip-label">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6v12l8.5-6zM16 6h2v12h-2z"/></svg>
+              </button>
+              <span class="visually-hidden" id="skip-label">Skip</span>
+            </div>
+          </div>
+          <p id="message" role="status"></p>
+        </div>
+
+        <!-- Shown after a focus session ends -->
+        <div class="panel" id="complete-panel" hidden>
+          <h3>Session complete!</h3>
+          <p id="complete-text">Nice work. Take a breather, you earned it.</p>
+          <p class="kicker">How focused did you feel?</p>
+          <div class="rating" role="group" aria-label="How focused did you feel?">
+            <button type="button" data-rating="1"><b>1</b>Scattered</button>
+            <button type="button" data-rating="2"><b>2</b>Okay</button>
+            <button type="button" data-rating="3"><b>3</b>Good</button>
+            <button type="button" data-rating="4"><b>4</b>Great</button>
+            <button type="button" data-rating="5"><b>5</b>In flow</button>
+          </div>
+          <div class="panel-actions">
+            <button class="btn btn-primary" id="start-break-btn" type="button">Start break</button>
+            <button class="btn btn-ghost" id="skip-break-btn" type="button">Skip break</button>
+          </div>
+        </div>
+
+        <details class="settings">
+          <summary>Timer settings</summary>
+          <div class="presets" role="group" aria-label="Presets"></div>
+          <div class="settings-grid">
+            <label>Focus (min)<input type="number" id="set-focus" min="1" max="180"></label>
+            <label>Short break (min)<input type="number" id="set-short" min="1" max="60"></label>
+            <label>Long break (min)<input type="number" id="set-long" min="1" max="60"></label>
+            <label>Long break every<input type="number" id="set-every" min="2" max="8"></label>
+            <label class="switch">Play a sound when time is up <input type="checkbox" role="switch" id="set-sound"></label>
+            <label class="switch">Notify me when I'm in another tab <input type="checkbox" role="switch" id="set-notify"></label>
+            <label class="switch">Start breaks automatically <input type="checkbox" role="switch" id="set-auto"></label>
+          </div>
+        </details>
+      </section>
+
+      <div class="side">
+        <!-- ===== Tasks ===== -->
+        <section class="card" id="tasks" aria-labelledby="tasks-heading">
+          <div class="card-head">
+            <h2 id="tasks-heading">Tasks</h2>
+            <div class="filter" role="group" aria-label="Show">
+              <button type="button" data-filter="open" aria-pressed="true">To do</button>
+              <button type="button" data-filter="done" aria-pressed="false">Done</button>
+            </div>
+          </div>
+          <form class="task-form" id="task-form">
+            <label class="visually-hidden" for="task-title">New task</label>
+            <input id="task-title" type="text" maxlength="100" placeholder="Add a task…" autocomplete="off" required>
+            <label class="visually-hidden" for="task-estimate">Focus rounds needed</label>
+            <select id="task-estimate">
+              <option value="1">1 round</option><option value="2">2 rounds</option><option value="3">3 rounds</option>
+              <option value="4">4 rounds</option><option value="6">6 rounds</option><option value="8">8 rounds</option>
+            </select>
+            <button class="btn btn-dark btn-small" type="submit">Add task</button>
+          </form>
+          <ul class="list" id="task-list" aria-busy="true"><li class="skeleton skeleton-row"></li><li class="skeleton skeleton-row"></li><li class="skeleton skeleton-row"></li></ul>
+        </section>
+
+        <!-- ===== Insights ===== -->
+        <section class="card" id="insights" aria-labelledby="insights-heading">
+          <div class="card-head"><h2 id="insights-heading">This week</h2></div>
+          <div class="big-stats">
+            <div><b id="today-minutes"><span class="skeleton skeleton-num"></span></b><span>min today</span></div>
+            <div><b id="today-count"><span class="skeleton skeleton-num"></span></b><span>sessions today</span></div>
+            <div><b id="streak"><span class="skeleton skeleton-num"></span></b><span>day streak</span></div>
+          </div>
+          <div class="chart">
+                        <div class="chart-total" id="week-total"><span class="skeleton"></span></div>
+            <div class="bars" id="week-bars"></div>
+          </div>
+          <p class="insight" id="insight"></p>
+          <p class="insight">All time: <b id="all-minutes">…</b> minutes in <b id="all-count">…</b> sessions.</p>
+          <details class="log" id="log">
+            <summary>Recent sessions</summary>
+            <ul class="list" id="session-list" aria-busy="true"><li class="skeleton skeleton-row"></li><li class="skeleton skeleton-row"></li></ul>
+            <button class="btn btn-ghost btn-small show-more" id="show-more" type="button" hidden>Show more</button>
+          </details>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <nav class="bottom-nav" aria-label="Sections">
+    <div class="nav-timer">
+      <span id="nav-time">25:00</span>
+      <button type="button" id="nav-start" aria-label="Start"><svg viewBox="0 0 24 24" id="nav-icon" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
+    </div>
+    <a href="#timer">Timer</a>
+    <a href="#tasks">Tasks</a>
+    <a href="#insights">Insights</a>
+  </nav>
+
+  <div class="toast" id="toast" role="status" hidden>
+    <span id="toast-text">Deleted</span>
+    <button type="button" id="toast-undo">Undo</button>
+  </div>
 
   <script src="/timer.js"></script>
 </body>

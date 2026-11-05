@@ -7,17 +7,20 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <main>
-    <h1>Focus Tracker</h1>
+  <main class="auth">
+    <a class="brand link" href="/">FOCUS/TRACKER</a>
     <section class="card">
       <h2>Create an account</h2>
+      <p class="hint">Free, no email needed.</p>
       <% if (error) { %><p class="error" role="alert"><%= error %></p><% } %>
       <form method="post" action="/signup" class="auth-form">
-        <label for="username">Username (3-30 letters, numbers or _)</label>
-        <input id="username" name="username" value="<%= username %>" autocomplete="username" required minlength="3" maxlength="30">
-        <label for="password">Password (at least 8 characters)</label>
-        <input id="password" name="password" type="password" autocomplete="new-password" required minlength="8">
-        <button class="primary" type="submit">Sign up</button>
+        <label for="username">Username</label>
+        <input id="username" name="username" value="<%= username %>" autocomplete="username" required minlength="3" maxlength="30" aria-describedby="username-hint">
+        <p class="hint" id="username-hint">3–30 letters, numbers or _</p>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="new-password" required minlength="8" aria-describedby="password-hint">
+        <p class="hint" id="password-hint">At least 8 characters</p>
+        <button class="btn btn-primary" type="submit">Sign up</button>
       </form>
       <p>Already have an account? <a href="/login">Log in</a></p>
     </section>
