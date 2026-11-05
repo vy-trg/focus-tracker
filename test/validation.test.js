@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { validateSession, parseId } = require("../validation");
+const { validateSession, parseId, validateTask, validateTaskTitle, validateTaskUpdate, validateRating } = require("../validation");
 
 test("accepts a normal session", () => {
   assert.deepEqual(validateSession({ label: "Study SQL", minutes: 25 }), []);
@@ -35,4 +35,70 @@ test("parseId only accepts positive whole numbers", () => {
   for (const raw of ["abc", "0", "-1", "2.5", ""]) {
     assert.equal(parseId(raw), null, `raw=${raw}`);
   }
+});
+test("accepts every known category, and no category at all", () => {
+  for (const category of ["study", "reading", "work", "journal", undefined]) {
+    assert.deepEqual(validateSession({ label: "x", minutes: 25, category }), [], `category=${category}`);
+  }
+});
+
+test("rejects an unknown category", () => {
+  for (const category of ["gaming", "Study", "", null, 1]) {
+    const errors = validateSession({ label: "x", minutes: 25, category });
+    assert.deepEqual(errors.map((e) => e.field), ["category"], `category=${category}`);
+  }
+});
+
+test("task_id is optional but must be a positive whole number when sent", () => {
+  assert.deepEqual(validateSession({ label: "x", minutes: 25, task_id: null }), []);
+  assert.deepEqual(validateSession({ label: "x", minutes: 25, task_id: 7 }), []);
+  for (const task_id of [0, -1, "abc", 2.5]) {
+    const errors = validateSession({ label: "x", minutes: 25, task_id });
+    assert.deepEqual(errors.map((e) => e.field), ["task_id"], `task_id=${task_id}`);
+  }
+});
+
+test("task titles must be 1-100 characters", () => {
+  assert.deepEqual(validateTaskTitle("Read chapter 3"), []);
+  assert.deepEqual(validateTaskTitle("a".repeat(100)), []);
+  for (const title of ["", "   ", "a".repeat(101), undefined, 5]) {
+    assert.equal(validateTaskTitle(title).length, 1, `title=${title}`);
+  }
+});
+
+test("a task update needs done or title, with the right types", () => {
+  assert.deepEqual(validateTaskUpdate({ done: true }), []);
+  assert.deepEqual(validateTaskUpdate({ title: "New name" }), []);
+  assert.equal(validateTaskUpdate({}).length, 1);
+  assert.equal(validateTaskUpdate(undefined).length, 1);
+  assert.deepEqual(validateTaskUpdate({ done: "yes" }).map((e) => e.field), ["done"]);
+});
+
+test("a task estimate is optional but must be 1-12 pomodoros", () => {
+  assert.deepEqual(validateTask({ title: "Read" }), []);
+  assert.deepEqual(validateTask({ title: "Read", estimate: 4 }), []);
+  for (const estimate of [0, 13, 2.5, "x"]) {
+    assert.deepEqual(validateTask({ title: "Read", estimate }).map((e) => e.field), ["estimate"], `estimate=${estimate}`);
+  }
+});
+
+test("a focus rating must be a whole number from 1 to 5", () => {
+  for (const r of [1, 3, 5]) assert.deepEqual(validateRating(r), []);
+  for (const r of [0, 6, 2.5, "3", null, undefined]) assert.equal(validateRating(r).length, 1, `rating=${r}`);
+});
+
+const { countStreak } = require("../streak");
+
+test("streak counts days in a row ending today", () => {
+  assert.equal(countStreak(["2026-11-05", "2026-11-04", "2026-11-03", "2026-11-01"], "2026-11-05"), 3);
+});
+
+test("streak still counts from yesterday when nothing is done yet today", () => {
+  assert.equal(countStreak(["2026-11-04", "2026-11-03"], "2026-11-05"), 2);
+});
+
+test("streak is 0 after a missed day, and works across months", () => {
+  assert.equal(countStreak(["2026-11-03"], "2026-11-05"), 0);
+  assert.equal(countStreak([], "2026-11-05"), 0);
+  assert.equal(countStreak(["2026-11-01", "2026-10-31", "2026-10-30"], "2026-11-01"), 3);
 });
