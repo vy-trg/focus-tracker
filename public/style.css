@@ -474,3 +474,9 @@ input[type="checkbox"]:not([role="switch"]):checked::after { content: ""; width:
 .bar.empty .bar-fill, .bar.today.empty .bar-fill { background: var(--line); min-height: 3px; }
 /* Bottom nav: dark in both themes (cream looked out of place in dark mode); 3 links now */
 .bottom-nav { grid-template-columns: auto repeat(3, 1fr); background: var(--dial); color: var(--dial-ink); padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)); }
+/* Presets sit under the timer so they are easy to find */
+.screen-panel .presets { justify-content: center; flex-wrap: wrap; overflow: visible; }
+.screen-panel .preset { padding: 6px 12px; font-size: 0.8rem; }
+.screen-panel .presets { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; max-width: 420px; gap: 6px; }
+.screen-panel .preset { text-align: center; padding: 6px 4px; }
+.toast { white-space: nowrap; }
