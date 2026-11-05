@@ -8,7 +8,7 @@ const PRESETS = {
   deep: { focus: 90, short: 20, long: 30, name: "Deep work", hint: "Big tasks" },
   sprint: { focus: 15, short: 3, long: 10, name: "Sprint", hint: "Get started" },
 };
-const DEFAULTS = { preset: "classic", ...PRESETS.classic, every: 4, sound: true, notify: false, auto: false };
+const DEFAULTS = { preset: "classic", ...PRESETS.classic, every: 4, sound: true, notify: false, auto: true };
 
 // localStorage can throw (private mode, blocked storage), so every access is wrapped
 function loadSettings() {
@@ -160,7 +160,8 @@ function start() {
   }
   showMessage("");
   askNotificationPermission();
-  els.completePanel.hidden = true;
+  // Keep the "rate this session" panel open during the break; close it once focus starts again
+  if (mode === "focus") els.completePanel.hidden = true;
   endAt = Date.now() + remainingMs;
   tick = setInterval(onTick, 250);
   render();
@@ -201,10 +202,12 @@ async function finish() {
     els.completeText.textContent = `Nice work on “${els.label.value.trim()}”. Take a breather, you earned it.`;
     els.ratingButtons.forEach((b) => b.setAttribute("aria-pressed", "false"));
     els.completePanel.hidden = false;
+    els.startBreak.hidden = settings.auto;
     render();
     if (settings.auto) start();
   } else {
     if (mode === "long") round = 0;
+    els.completePanel.hidden = true;
     mode = "focus";
     remainingMs = minutesFor("focus") * UNIT;
     showMessage("Break's over. Press Start when you're ready.");
@@ -622,7 +625,7 @@ async function loadStats() {
     bars.innerHTML = "";
     stats.week.forEach((d, i) => {
       const bar = document.createElement("div");
-      bar.className = "bar" + (i === stats.week.length - 1 ? " today" : "");
+      bar.className = "bar" + (i === stats.week.length - 1 ? " today" : "") + (d.minutes === 0 ? " empty" : "");
       const dayName = new Date(`${d.day}T00:00:00`).toLocaleDateString([], { weekday: "short" });
       bar.innerHTML = '<div class="bar-fill"></div><span></span>';
       bar.querySelector(".bar-fill").style.height = `${Math.round((d.minutes / max) * 100)}%`;
