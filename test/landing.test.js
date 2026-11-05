@@ -23,7 +23,7 @@ test("a logged-out visitor sees the landing page instead of being sent to /login
   const res = await fetch(`${baseUrl}/`, { redirect: "manual" });
   assert.equal(res.status, 200);
   const html = await res.text();
-  assert.match(html, /Get started/);
+  assert.match(html, /Start focusing/);
 });
 
 test("the landing page links to sign up and log in", async () => {

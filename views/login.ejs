@@ -7,17 +7,18 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <main>
-    <h1>Focus Tracker</h1>
+  <main class="auth">
+    <a class="brand link" href="/">FOCUS/TRACKER</a>
     <section class="card">
-      <h2>Log in</h2>
+      <h2>Welcome back</h2>
+      <p class="hint">Log in to keep your streak going.</p>
       <% if (error) { %><p class="error" role="alert"><%= error %></p><% } %>
       <form method="post" action="/login" class="auth-form">
         <label for="username">Username</label>
         <input id="username" name="username" autocomplete="username" required>
         <label for="password">Password</label>
         <input id="password" name="password" type="password" autocomplete="current-password" required>
-        <button class="primary" type="submit">Log in</button>
+        <button class="btn btn-primary" type="submit">Log in</button>
       </form>
       <p>No account? <a href="/signup">Sign up</a></p>
     </section>
