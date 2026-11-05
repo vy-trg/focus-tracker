@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Focus Tracker · Pomodoro timer that remembers your work</title>
+  <meta name="description" content="A Pomodoro timer with breaks that saves every focus session and shows how much you got done today.">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="page">
+    <header class="top">
+      <span class="brand">FOCUS/TRACKER</span>
+      <a class="link" href="/login">Log in</a>
+    </header>
+
+    <section class="hero">
+      <div class="hero-text">
+        <h1>Focus. Break. Repeat. See what you got done.</h1>
+        <p class="lead">A focus timer with built-in breaks that saves every session, so at the end of the day you know where your time actually went.</p>
+        <p class="cta">
+          <a class="btn btn-primary" href="/signup">Start focusing</a>
+          <span class="note">Free, no email needed.</span>
+        </p>
+      </div>
+
+      <!-- Preview of the timer, drawn with HTML and CSS only -->
+      <div class="device" aria-hidden="true">
+        <div class="modes"><span class="mode on">Focus</span><span class="mode">Short break</span><span class="mode">Long break</span></div>
+        <div class="preview-ring">
+          <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="pr-track"></circle><circle cx="60" cy="60" r="52" class="pr-fill"></circle></svg>
+          <div class="pr-center"><span>Odin Project Node</span><b>18:42</b></div>
+        </div>
+        <div class="screen-dots"><i class="done"></i><i class="done"></i><i class="now"></i><i></i></div>
+        <div class="pr-buttons"><i></i><i class="play"></i><i></i></div>
+      </div>
+    </section>
+
+    <section class="features" aria-label="Features">
+      <article class="tile"><h2>Timer + breaks</h2><p>Focus blocks that switch to a break on their own, accurate even when the tab is in the background.</p></article>
+      <article class="tile"><h2>History</h2><p>Every finished focus session is saved to your account with what you worked on.</p></article>
+      <article class="tile"><h2>Stats</h2><p>Sessions and minutes for today and all time, at a glance.</p></article>
+    </section>
+
+    <footer class="foot"><a class="link" href="https://github.com/vy-trg/focus-tracker">Source on GitHub</a></footer>
+  </main>
+</body>
+</html>
