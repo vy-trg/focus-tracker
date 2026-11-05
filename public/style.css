@@ -469,3 +469,8 @@ input[type="checkbox"]:not([role="switch"]):checked::after { content: ""; width:
 #message:empty { display: none; }
 .pr-buttons i.play { display: grid; place-items: center; }
 .pr-buttons i.play::after { content: ""; border-left: 18px solid var(--on-accent); border-top: 11px solid transparent; border-bottom: 11px solid transparent; margin-left: 5px; }
+
+/* Days with no focus show a thin neutral line, never the "today" colour */
+.bar.empty .bar-fill, .bar.today.empty .bar-fill { background: var(--line); min-height: 3px; }
+/* Bottom nav: dark in both themes (cream looked out of place in dark mode); 3 links now */
+.bottom-nav { grid-template-columns: auto repeat(3, 1fr); background: var(--dial); color: var(--dial-ink); padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)); }
