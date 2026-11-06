@@ -7,18 +7,23 @@ const { countStreak } = require("../streak");
 // ---------- Sessions ----------
 
 // 1. This user's latest 50 sessions, with the task title when the session was for a task
-async function getAllSessions(userId) {
+// One page of this user's sessions, newest first, using keyset pagination:
+// `before` is the id of the last session on the previous page (null for the first page).
+// One extra row is fetched to know whether another page exists, without a COUNT(*).
+async function getSessionsPage(userId, limit, before) {
   const { rows } = await pool.query(
     `SELECT s.id, s.label, s.minutes, s.category, s.task_id, s.rating, s.started_at,
             t.title AS task_title
      FROM sessions s
      LEFT JOIN tasks t ON t.id = s.task_id
-     WHERE s.user_id = $1
-     ORDER BY s.started_at DESC
-     LIMIT 50`,
-    [userId]
+     WHERE s.user_id = $1 AND ($2::int IS NULL OR s.id < $2)
+     ORDER BY s.id DESC
+     LIMIT $3`,
+    [userId, before, limit + 1]
   );
-  return rows;
+  const hasMore = rows.length > limit;
+  const sessions = rows.slice(0, limit);
+  return { sessions, nextBefore: hasMore ? sessions[sessions.length - 1].id : null };
 }
 
 // 2. Save a finished focus session
@@ -191,7 +196,7 @@ async function getReport(userId, days) {
 
 module.exports = {
   getReport,
-  getAllSessions,
+  getSessionsPage,
   insertSession,
   deleteSession,
   rateSession,

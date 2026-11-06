@@ -16,6 +16,7 @@ const {
   validateRating,
   parseId,
   parseRange,
+  parseLimit,
 } = require("./validation");
 
 const app = express();
@@ -147,11 +148,16 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true });
 });
 
-// 1. GET /api/sessions: this user's latest 50 sessions
+// 1. GET /api/sessions?limit=20&before=123: one page of this user's sessions, newest first.
+// Returns { sessions, nextBefore }; pass nextBefore as `before` to get the next page (null = no more).
 app.get("/api/sessions", async (req, res) => {
+  const limit = parseLimit(req.query.limit);
+  const before = req.query.before === undefined ? null : parseId(req.query.before);
+  if (limit === null || (req.query.before !== undefined && before === null)) {
+    return res.status(400).json({ error: "limit must be 1-100 and before must be a positive whole number" });
+  }
   try {
-    const sessions = await db.getAllSessions(req.user.id);
-    res.json(sessions);
+    res.json(await db.getSessionsPage(req.user.id, limit, before));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server Error" });

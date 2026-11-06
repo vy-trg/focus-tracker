@@ -48,10 +48,14 @@ A Pomodoro timer that saves every finished focus session to PostgreSQL and shows
 | `POST` | `/signup` | Create an account and log in. Username 3–30 letters, numbers or `_`; password at least 8 characters |
 | `POST` | `/login` | Log in. Wrong username or password both show the same message |
 | `POST` | `/logout` | Log out (POST, so a link on another site can't log you out) |
-| `GET` | `/api/sessions` | **Requires login.** Your latest 50 sessions, newest first |
-| `POST` | `/api/sessions` | **Requires login.** Create a session. Body: `{ "label": "Odin Project", "minutes": 25 }`. Returns `201` with the new session, or `400` with `errors` |
+| `GET` | `/api/sessions?limit=20&before=123` | **Requires login.** One page of your sessions, newest first: `{ sessions, nextBefore }`. `limit` 1–100 (default 20); pass `nextBefore` as `before` for the next page (`null` = no more). See [Pagination](#pagination) |
+| `POST` | `/api/sessions` | **Requires login.** Create a session. Body: `{ "label": "Odin Project", "minutes": 25, "category": "study", "task_id": 3 }` (`category` and `task_id` optional). Returns `201` with the new session, or `400` with `errors`. Linking a task that isn't yours returns `400` |
+| `PATCH` | `/api/sessions/:id` | **Requires login.** Rate a session: `{ "rating": 1-5 }` |
 | `DELETE` | `/api/sessions/:id` | **Requires login.** Delete one of your sessions. `204` on success, `404` if it doesn't exist or isn't yours |
-| `GET` | `/api/stats` | **Requires login.** `{ today: { count, total_minutes }, allTime: { count, total_minutes } }` for you |
+| `GET` | `/api/stats` | **Requires login.** Today, all time, last 7 days, streak and best hour |
+| `GET` | `/api/reports?range=day\|week\|month` | **Requires login.** Minutes per day and category for 1, 7 or 30 days (Brisbane time, from midnight; empty days included) and totals. Other ranges return `400` |
+| `GET`, `POST` | `/api/tasks` | **Requires login.** Your to-do list / add a task: `{ "title": "...", "estimate": 1-12 }` |
+| `PATCH`, `DELETE` | `/api/tasks/:id` | **Requires login.** Mark done or rename / delete. `404` if the task isn't yours |
 | `GET` | `/api/health` | `{ ok: true }` (no login needed) |
 
 API routes that require login return `401 { "error": "Please log in" }` without a valid session cookie. `/api` allows 100 requests per 15 minutes per IP; `/login` and `/signup` allow 10.
@@ -159,8 +163,27 @@ compose.yaml       Local app + PostgreSQL for development
 
 ---
 
+## Pagination
+
+`GET /api/sessions` used to return only the latest 50 sessions. Anyone with more than 50 could never see the older ones, and the API didn't say there were more.
+
+There are two common ways to page through a list:
+
+- **OFFSET** (`?page=3` → `LIMIT 20 OFFSET 40`): simple, but the database still reads and throws away the skipped rows, and when a new session is added while you're paging, everything shifts by one, so a page can repeat or skip a session.
+- **Keyset / cursor** (`?before=123` → `WHERE id < 123 ORDER BY id DESC LIMIT 20`): each page starts right after the last row you saw. It uses an index, so page 50 is as fast as page 1, and new sessions don't shift older pages.
+
+I used keyset pagination:
+
+```sql
+SELECT ... FROM sessions
+WHERE user_id = $1 AND ($2::int IS NULL OR id < $2)
+ORDER BY id DESC
+LIMIT $3 + 1;
+```
+
+It fetches one extra row to know whether there is another page, without a `COUNT(*)`. The response is `{ sessions, nextBefore }`, and the "Show more" button asks for the next 10 with `before=nextBefore`. The index `(user_id, id DESC)` (migration `002`) matches the `WHERE` and `ORDER BY`.
+
 ## Known limitations & next steps
 
-- The focus length is fixed at 25 minutes. Next: let the user pick the length and add short breaks between sessions.
-- A notification or sound when the timer ends, so it works with the tab in the background.
 - No password reset or email verification yet: a forgotten password means a new account.
+- Reports group by the day a session **started**, so a session that starts at 11:50pm counts for that day even if it ends after midnight.
