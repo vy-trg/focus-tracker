@@ -10,6 +10,7 @@
   <div class="shell">
     <header class="topbar">
       <span class="brand">Focus Tracker</span>
+      <nav class="top-nav" aria-label="Sections"><a href="#timer">Timer</a><a href="#tasks">Tasks</a><a href="#insights">Reports</a></nav>
       <div class="who">
         <span>Hi, <strong><%= username %></strong></span>
         <form method="post" action="/logout"><button class="btn btn-ghost btn-small" type="submit">Log out</button></form>
@@ -147,16 +148,31 @@
 
         <!-- ===== Insights ===== -->
         <section class="card" id="insights" aria-labelledby="insights-heading">
-          <div class="card-head"><h2 id="insights-heading">This week</h2></div>
+          <div class="card-head">
+            <h2 id="insights-heading">Reports</h2>
+            <div class="filter" role="tablist" aria-label="Report range">
+              <button type="button" role="tab" data-range="day" aria-selected="false" aria-controls="report-chart">Today</button>
+              <button type="button" role="tab" data-range="week" aria-selected="true" aria-controls="report-chart">7 days</button>
+              <button type="button" role="tab" data-range="month" aria-selected="false" aria-controls="report-chart">30 days</button>
+            </div>
+          </div>
           <div class="big-stats">
             <div><b id="today-minutes"><span class="skeleton skeleton-num"></span></b><span>min today</span></div>
             <div><b id="today-count"><span class="skeleton skeleton-num"></span></b><span>sessions today</span></div>
             <div><b id="streak"><span class="skeleton skeleton-num"></span></b><span>day streak</span></div>
           </div>
-          <div class="chart">
-                        <div class="chart-total" id="week-total"><span class="skeleton"></span></div>
-            <div class="bars" id="week-bars"></div>
+          <div class="chart" id="report-chart" role="tabpanel" aria-labelledby="insights-heading">
+            <div class="chart-total" id="report-total"><span class="skeleton"></span></div>
+            <div class="report-bars" id="report-bars" aria-hidden="true"><span class="skeleton skeleton-chart"></span></div>
           </div>
+          <ul class="legend" id="report-legend"></ul>
+          <details class="report-table">
+            <summary>Show table</summary>
+            <table>
+              <thead><tr><th scope="col">Day</th><th scope="col">Study</th><th scope="col">Reading</th><th scope="col">Work</th><th scope="col">Journal</th></tr></thead>
+              <tbody id="report-rows"></tbody>
+            </table>
+          </details>
           <p class="insight" id="insight"></p>
           <p class="insight">All time: <b id="all-minutes">…</b> minutes in <b id="all-count">…</b> sessions.</p>
           <details class="log" id="log">
@@ -177,7 +193,7 @@
     </div>
     <a href="#timer">Timer</a>
     <a href="#tasks">Tasks</a>
-    <a href="#insights">Insights</a>
+    <a href="#insights">Reports</a>
   </nav>
 
   <div class="toast" id="toast" role="status" hidden>

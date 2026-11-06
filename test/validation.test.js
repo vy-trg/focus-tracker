@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { validateSession, parseId, validateTask, validateTaskTitle, validateTaskUpdate, validateRating } = require("../validation");
+const { validateSession, parseId, validateTask, validateTaskTitle, validateTaskUpdate, validateRating, parseRange } = require("../validation");
 
 test("accepts a normal session", () => {
   assert.deepEqual(validateSession({ label: "Study SQL", minutes: 25 }), []);
@@ -101,4 +101,16 @@ test("streak is 0 after a missed day, and works across months", () => {
   assert.equal(countStreak(["2026-11-03"], "2026-11-05"), 0);
   assert.equal(countStreak([], "2026-11-05"), 0);
   assert.equal(countStreak(["2026-11-01", "2026-10-31", "2026-10-30"], "2026-11-01"), 3);
+});
+
+test("parseRange turns day, week and month into 1, 7 and 30 days", () => {
+  assert.equal(parseRange("day"), 1);
+  assert.equal(parseRange("week"), 7);
+  assert.equal(parseRange("month"), 30);
+});
+
+test("parseRange rejects anything else", () => {
+  for (const raw of ["abc", "", undefined, "7", "toString", "WEEK"]) {
+    assert.equal(parseRange(raw), null, `raw=${raw}`);
+  }
 });

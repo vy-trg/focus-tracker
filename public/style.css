@@ -480,3 +480,59 @@ input[type="checkbox"]:not([role="switch"]):checked::after { content: ""; width:
 .screen-panel .presets { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; max-width: 420px; gap: 6px; }
 .screen-panel .preset { text-align: center; padding: 6px 4px; }
 .toast { white-space: nowrap; }
+
+/* ---------- Reports ---------- */
+.seg-study { background: var(--focus); }
+.seg-reading { background: var(--long); }
+.seg-work { background: var(--short); }
+.seg-journal { background: #e0a72e; }
+#insights [role="tab"] { border: 0; border-radius: 999px; color: var(--muted); background: transparent; padding: 4px 12px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
+#insights [role="tab"][aria-selected="true"] { background: var(--bg); color: var(--ink); }
+#insights .card-head { flex-wrap: wrap; }
+.report-bars { --cols: 7; display: grid; grid-template-columns: repeat(var(--cols), 1fr); gap: clamp(2px, 1vw, 8px); align-items: end; height: 140px; margin-top: 10px; }
+.rbar { display: grid; grid-template-rows: 1fr auto; justify-items: center; align-self: stretch; gap: 6px; min-width: 0; }
+.rstack { align-self: end; width: 100%; max-width: 34px; min-height: 3px; display: flex; flex-direction: column-reverse; border-radius: 4px 4px 0 0; overflow: hidden; }
+.rbar.empty .rstack { background: var(--line); height: 3px !important; }
+.rbar span { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); white-space: nowrap; min-height: 1em; }
+.skeleton-chart { grid-column: 1 / -1; height: 100%; width: 100%; }
+.legend { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 16px; }
+.legend li { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.legend b { margin-left: auto; font-family: var(--mono); font-weight: 600; }
+.report-table summary { cursor: pointer; color: var(--muted); font-weight: 600; font-size: 0.9rem; }
+.report-table table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.report-table th, .report-table td { text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.report-table th[scope="row"], .report-table thead th:first-child { text-align: left; }
+#insights { display: grid; gap: 14px; }
+#insights .card-head { margin-bottom: 0; }
+.top-nav { display: none; gap: 18px; font-weight: 600; }
+.top-nav a { color: var(--muted); text-decoration: none; }
+.top-nav a:hover { color: var(--ink); }
+@media (min-width: 960px) { .top-nav { display: flex; } }
+.rbar span { overflow: visible; justify-self: end; }
+.report-bars { padding-right: 4px; }
+
+/* ---------- Landing: status chips around the timer (hero 3/4) ---------- */
+.device-wrap { position: relative; display: grid; gap: 10px; }
+.chip { display: inline-flex; align-items: center; gap: 8px; width: max-content; background: var(--screen); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-size: 0.85rem; font-weight: 600; box-shadow: 0 6px 18px rgb(0 0 0 / 0.08); }
+.chip b { font-family: var(--mono); }
+.chip .dot { width: 10px; height: 10px; border-radius: 50%; }
+.mini-bars { display: inline-flex; align-items: end; gap: 2px; height: 14px; }
+.mini-bars i { width: 4px; border-radius: 1px; }
+.mini-bars i:nth-child(1) { height: 14px; } .mini-bars i:nth-child(2) { height: 8px; } .mini-bars i:nth-child(3) { height: 11px; }
+@media (min-width: 800px) {
+  .device-wrap { display: block; padding: 0 28px; }
+  .chip { position: absolute; z-index: 1; }
+  .chip-a { top: 18%; left: -6px; }
+  .chip-b { top: 6%; right: -6px; }
+  .chip-c { bottom: 10%; right: -6px; }
+}
+.built { display: grid; gap: 12px; justify-items: start; }
+.built h2 { font-size: 0.9rem; color: var(--muted); margin: 0; }
+.built ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.built li { background: var(--screen); border-radius: 999px; padding: 6px 12px; font-size: 0.85rem; font-weight: 600; }
+.report-bars { grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); }
+.rbar span { justify-self: center; }
+@media (min-width: 800px) { .chip-b { top: -18px; right: 8%; } }
+.rbar { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 800px) { .chip-c { bottom: -18px; right: 4%; } }

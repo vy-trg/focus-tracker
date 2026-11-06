@@ -15,6 +15,7 @@ const {
   validateTaskUpdate,
   validateRating,
   parseId,
+  parseRange,
 } = require("./validation");
 
 const app = express();
@@ -140,6 +141,7 @@ app.get("/", (req, res) => {
 app.use("/api/sessions", requireAuth);
 app.use("/api/stats", requireAuth);
 app.use("/api/tasks", requireAuth);
+app.use("/api/reports", requireAuth);
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true });
@@ -227,6 +229,20 @@ app.get("/api/stats", async (req, res) => {
   try {
     const stats = await db.getStats(req.user.id);
     res.json(stats);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server Error" });
+  }
+});
+
+// 5. GET /api/reports?range=day|week|month: minutes per day and category
+app.get("/api/reports", async (req, res) => {
+  const days = parseRange(req.query.range);
+  if (days === null) {
+    return res.status(400).json({ error: "range must be day, week or month" });
+  }
+  try {
+    res.json(await db.getReport(req.user.id, days));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server Error" });

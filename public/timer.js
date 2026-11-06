@@ -72,7 +72,8 @@ const els = {
   taskTitle: $("task-title"),
   taskEstimate: $("task-estimate"),
   taskList: $("task-list"),
-  filterButtons: document.querySelectorAll(".filter button"),
+  filterButtons: document.querySelectorAll("#tasks .filter button"),
+  rangeTabs: document.querySelectorAll("#insights [data-range]"),
   sessionList: $("session-list"),
   toast: $("toast"),
   toastText: $("toast-text"),
@@ -648,29 +649,97 @@ async function loadStats() {
     $("all-minutes").textContent = stats.allTime.total_minutes;
     $("all-count").textContent = stats.allTime.count;
 
-    const weekMinutes = stats.week.reduce((sum, d) => sum + d.minutes, 0);
-    $("week-total").textContent = `${Math.floor(weekMinutes / 60)}h ${weekMinutes % 60}m`;
-
-    const max = Math.max(60, ...stats.week.map((d) => d.minutes));
-    const bars = $("week-bars");
-    bars.innerHTML = "";
-    stats.week.forEach((d, i) => {
-      const bar = document.createElement("div");
-      bar.className = "bar" + (i === stats.week.length - 1 ? " today" : "") + (d.minutes === 0 ? " empty" : "");
-      const dayName = new Date(`${d.day}T00:00:00`).toLocaleDateString([], { weekday: "short" });
-      bar.innerHTML = '<div class="bar-fill"></div><span></span>';
-      bar.querySelector(".bar-fill").style.height = `${Math.round((d.minutes / max) * 100)}%`;
-      bar.querySelector("span").textContent = dayName;
-      bar.title = `${dayName}: ${d.minutes} min`;
-      bars.append(bar);
-    });
-
     $("insight").textContent =
       stats.bestHour === null
         ? "Finish a few sessions to see when you focus best."
         : `You focus most around ${formatHour(stats.bestHour)}. Schedule hard tasks then.`;
   } catch (err) {
     showMessage(`Couldn't load your insights. ${err.message}`, true);
+  }
+}
+
+// ---------- Reports ----------
+// Minutes per day, stacked by category. Plain HTML/CSS bars, so no chart library and no CSP change.
+const REPORT_CATEGORIES = ["study", "reading", "work", "journal"];
+let reportRange = "week";
+
+function formatMinutes(m) {
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+async function loadReport() {
+  try {
+    const report = await api(`/api/reports?range=${reportRange}`);
+    renderReport(report);
+  } catch (err) {
+    showMessage(`Couldn't load your report. ${err.message}`, true);
+  }
+}
+
+function renderReport({ days, totals }) {
+  const total = REPORT_CATEGORIES.reduce((sum, c) => sum + totals[c], 0);
+  $("report-total").textContent = formatMinutes(total);
+
+  const dayTotal = (d) => REPORT_CATEGORIES.reduce((sum, c) => sum + d[c], 0);
+  const max = Math.max(60, ...days.map(dayTotal));
+  const bars = $("report-bars");
+  bars.innerHTML = "";
+  bars.style.setProperty("--cols", days.length);
+  const today = days.length - 1;
+  days.forEach((d, i) => {
+    const date = new Date(`${d.day}T00:00:00`);
+    const col = document.createElement("div");
+    col.className = "rbar" + (dayTotal(d) === 0 ? " empty" : "");
+    const stack = document.createElement("div");
+    stack.className = "rstack";
+    stack.style.height = `${Math.round((dayTotal(d) / max) * 100)}%`;
+    for (const c of REPORT_CATEGORIES) {
+      if (!d[c]) continue;
+      const seg = document.createElement("i");
+      seg.className = `seg-${c}`;
+      seg.style.flexGrow = d[c];
+      stack.append(seg);
+    }
+    const label = document.createElement("span");
+    // 30 bars are too narrow for every label: show today and every 10th day before it
+    const showLabel = days.length <= 7 || (today - i) % 10 === 0;
+    label.textContent = !showLabel
+      ? ""
+      : days.length === 1
+        ? "Today"
+        : days.length <= 7
+          ? date.toLocaleDateString([], { weekday: "short" })
+          : date.toLocaleDateString([], { day: "numeric", month: "short" });
+    col.title = `${date.toLocaleDateString()}: ${dayTotal(d)} min`;
+    col.append(stack, label);
+    bars.append(col);
+  });
+
+  const legend = $("report-legend");
+  legend.innerHTML = "";
+  for (const c of REPORT_CATEGORIES) {
+    const li = document.createElement("li");
+    li.innerHTML = `<i class="seg-${c}"></i><span></span><b></b>`;
+    li.querySelector("span").textContent = CATEGORY_NAMES[c];
+    li.querySelector("b").textContent = formatMinutes(totals[c]);
+    legend.append(li);
+  }
+
+  // Same numbers as a table, for screen readers and anyone who prefers exact figures
+  const rows = $("report-rows");
+  rows.innerHTML = "";
+  for (const d of days) {
+    const tr = document.createElement("tr");
+    const th = document.createElement("th");
+    th.scope = "row";
+    th.textContent = new Date(`${d.day}T00:00:00`).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+    tr.append(th);
+    for (const c of REPORT_CATEGORIES) {
+      const td = document.createElement("td");
+      td.textContent = d[c];
+      tr.append(td);
+    }
+    rows.append(tr);
   }
 }
 
@@ -682,10 +751,18 @@ function formatHour(h) {
 function refreshAll() {
   loadSessions();
   loadStats();
+  loadReport();
   loadTasks();
 }
 
 // ---------- Wire up ----------
+els.rangeTabs.forEach((tab) =>
+  tab.addEventListener("click", () => {
+    reportRange = tab.dataset.range;
+    els.rangeTabs.forEach((t) => t.setAttribute("aria-selected", String(t === tab)));
+    loadReport();
+  }),
+);
 els.start.addEventListener("click", () => (isRunning() ? pause() : start()));
 els.navStart.addEventListener("click", () => (isRunning() ? pause() : start()));
 els.showMore.addEventListener("click", () => {

@@ -31,3 +31,10 @@ test("the landing page links to sign up and log in", async () => {
   assert.match(html, /href="\/signup"/);
   assert.match(html, /href="\/login"/);
 });
+
+test("the landing page only promises features the app has, and lists what it is built with", async () => {
+  const html = await (await fetch(`${baseUrl}/`, { redirect: "manual" })).text();
+  for (const feature of ["Categories + to-do", "Pomodoro presets", "Reports", "Built with"]) {
+    assert.match(html, new RegExp(feature.replace("+", "\\+")), feature);
+  }
+});
