@@ -64,9 +64,11 @@ const els = {
   setAuto: $("set-auto"),
   setNotify: $("set-notify"),
   startLabel: $("start-label"),
-  navTime: $("nav-time"),
-  navStart: $("nav-start"),
-  navIcon: $("nav-icon"),
+  navTimes: document.querySelectorAll(".nav-time"),
+  navStarts: document.querySelectorAll(".nav-start"),
+  navIcons: document.querySelectorAll(".nav-icon"),
+  viewLinks: document.querySelectorAll("[data-view]"),
+  focusModeBtn: $("focus-mode-btn"),
   showMore: $("show-more"),
   taskForm: $("task-form"),
   taskTitle: $("task-title"),
@@ -128,10 +130,10 @@ function render() {
   const action = isRunning() ? "Pause" : left < total ? "Resume" : "Start";
   els.startIcon.innerHTML = icon;
   els.startLabel.textContent = action;
-  // The small timer in the bottom bar (phones) mirrors the big one
-  els.navTime.textContent = format(left);
-  els.navIcon.innerHTML = icon;
-  els.navStart.setAttribute("aria-label", action);
+  // The small timers (bottom bar on phones, top bar on the Reports page) mirror the big one
+  els.navTimes.forEach((el) => (el.textContent = format(left)));
+  els.navIcons.forEach((el) => (el.innerHTML = icon));
+  els.navStarts.forEach((el) => el.setAttribute("aria-label", action));
 
   document.body.dataset.mode = mode;
   els.tabs.forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.mode === mode)));
@@ -767,7 +769,32 @@ els.rangeTabs.forEach((tab) =>
   }),
 );
 els.start.addEventListener("click", () => (isRunning() ? pause() : start()));
-els.navStart.addEventListener("click", () => (isRunning() ? pause() : start()));
+els.navStarts.forEach((b) => b.addEventListener("click", () => (isRunning() ? pause() : start())));
+
+// ---------- Pages: Focus (timer + tasks) and Reports ----------
+// Switched in the page with the URL hash (#/ and #/reports), so a running timer never stops.
+function showView() {
+  const view = location.hash === "#/reports" ? "reports" : "focus";
+  document.body.dataset.view = view;
+  els.viewLinks.forEach((a) => {
+    if (a.dataset.view === view) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  });
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", showView);
+showView();
+
+// ---------- Focus mode: only the timer on screen ----------
+function setFocusMode(on) {
+  document.body.classList.toggle("focus-mode", on);
+  els.focusModeBtn.setAttribute("aria-pressed", String(on));
+  els.focusModeBtn.querySelector("span").textContent = on ? "Exit focus mode" : "Focus mode";
+}
+els.focusModeBtn.addEventListener("click", () => setFocusMode(!document.body.classList.contains("focus-mode")));
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && document.body.classList.contains("focus-mode")) setFocusMode(false);
+});
 els.showMore.addEventListener("click", async () => {
   els.showMore.disabled = true;
   try {

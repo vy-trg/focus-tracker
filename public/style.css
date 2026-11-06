@@ -536,3 +536,32 @@ input[type="checkbox"]:not([role="switch"]):checked::after { content: ""; width:
 @media (min-width: 800px) { .chip-b { top: -18px; right: 8%; } }
 .rbar { grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 800px) { .chip-c { bottom: -18px; right: 4%; } }
+
+/* ---------- Pages: Focus and Reports ---------- */
+body[data-view="focus"] #insights { display: none; }
+body[data-view="reports"] #timer, body[data-view="reports"] #tasks { display: none; }
+body[data-view="reports"] .layout { grid-template-columns: minmax(0, 1fr); max-width: 860px; width: 100%; margin: 0 auto; }
+.top-nav a { padding: 6px 14px; border-radius: 999px; }
+.top-nav a[aria-current="page"] { background: var(--screen); color: var(--ink); }
+.bottom-nav { grid-template-columns: auto repeat(2, 1fr); }
+.bottom-nav a[aria-current="page"] { background: rgb(255 255 255 / 0.12); }
+.topbar .nav-timer { display: none; }
+@media (min-width: 960px) {
+  body[data-view="reports"] .topbar .nav-timer { display: flex; }
+}
+
+/* ---------- Focus mode ---------- */
+.screen-panel { position: relative; }
+.focus-mode-btn { position: absolute; top: 0; right: 0; display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--muted); font-size: 0.8rem; font-weight: 600; padding: 6px 8px; border-radius: 999px; cursor: pointer; }
+.focus-mode-btn:hover { background: var(--bg); color: var(--ink); }
+.focus-mode-btn svg { width: 16px; height: 16px; fill: currentColor; }
+body.focus-mode .topbar, body.focus-mode .side, body.focus-mode .bottom-nav,
+body.focus-mode .context, body.focus-mode .presets, body.focus-mode .settings { display: none !important; }
+body.focus-mode .shell { min-height: 100vh; align-content: center; padding-bottom: 24px; }
+body.focus-mode .layout { grid-template-columns: minmax(0, 1fr); max-width: 560px; width: 100%; margin: 0 auto; }
+body.focus-mode .timer-device { background: transparent; border-color: transparent; }
+body.focus-mode .ring { width: min(340px, 80vw); }
+body.focus-mode #time-display { font-size: clamp(3.2rem, 14vw, 4.6rem); }
+body.focus-mode .focus-mode-btn { position: fixed; top: 16px; right: 16px; }
+.focus-mode-btn { position: static; justify-self: end; margin: -4px 0 -10px; z-index: 2; }
+body.focus-mode .focus-mode-btn { position: fixed; top: 16px; right: 16px; margin: 0; }
