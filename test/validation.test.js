@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { validateSession, parseId, validateTask, validateTaskTitle, validateTaskUpdate, validateRating, parseRange } = require("../validation");
+const { validateSession, parseId, validateTask, validateTaskTitle, validateTaskUpdate, validateRating, parseRange, parseLimit } = require("../validation");
 
 test("accepts a normal session", () => {
   assert.deepEqual(validateSession({ label: "Study SQL", minutes: 25 }), []);
@@ -112,5 +112,17 @@ test("parseRange turns day, week and month into 1, 7 and 30 days", () => {
 test("parseRange rejects anything else", () => {
   for (const raw of ["abc", "", undefined, "7", "toString", "WEEK"]) {
     assert.equal(parseRange(raw), null, `raw=${raw}`);
+  }
+});
+
+test("parseLimit defaults to 20 and accepts 1 to 100", () => {
+  assert.equal(parseLimit(undefined), 20);
+  assert.equal(parseLimit("1"), 1);
+  assert.equal(parseLimit("100"), 100);
+});
+
+test("parseLimit rejects anything outside 1 to 100", () => {
+  for (const raw of ["0", "101", "-5", "2.5", "abc", ""]) {
+    assert.equal(parseLimit(raw), null, `raw=${raw}`);
   }
 });

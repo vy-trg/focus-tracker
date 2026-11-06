@@ -75,9 +75,17 @@ function parseRange(raw) {
   return Object.hasOwn(RANGES, raw) ? RANGES[raw] : null;
 }
 
+// Page size for GET /api/sessions: missing -> 20, otherwise a whole number from 1 to 100, else null (400).
+function parseLimit(raw) {
+  if (raw === undefined) return 20;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 && n <= 100 ? n : null;
+}
+
 module.exports = {
   CATEGORIES,
   parseRange,
+  parseLimit,
   parseId,
   validateSession,
   validateTask,

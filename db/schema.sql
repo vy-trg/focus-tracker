@@ -29,3 +29,4 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 CREATE INDEX IF NOT EXISTS sessions_user_started_idx ON sessions (user_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions (user_id, id DESC);

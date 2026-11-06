@@ -413,12 +413,15 @@ const CATEGORY_NAMES = { study: "Study", reading: "Reading", work: "Work", journ
 const RATING_NAMES = ["", "Scattered", "Okay", "Good", "Great", "In flow"];
 
 // The log starts with 5 rows; "Show more" adds 10 at a time
-let sessionsShown = 5;
+let nextBefore = null; // id to ask for the next page of sessions; null = no more
 let allSessions = [];
 
+// First page: 5 sessions. "Show more" asks the server for the next 10 (keyset pagination).
 async function loadSessions() {
   try {
-    allSessions = await api("/api/sessions");
+    const page = await api("/api/sessions?limit=5");
+    allSessions = page.sessions;
+    nextBefore = page.nextBefore;
     renderSessions();
   } catch (err) {
     showMessage(`Couldn't load your session log. ${err.message}`, true);
@@ -428,12 +431,12 @@ async function loadSessions() {
 function renderSessions() {
   els.sessionList.removeAttribute("aria-busy");
   els.sessionList.innerHTML = "";
-  els.showMore.hidden = allSessions.length <= sessionsShown;
+  els.showMore.hidden = nextBefore === null;
   if (allSessions.length === 0) {
     els.sessionList.innerHTML = '<li class="empty">No sessions yet. Finish a focus block and it shows up here.</li>';
     return;
   }
-  for (const s of allSessions.slice(0, sessionsShown)) {
+  for (const s of allSessions) {
     const li = document.createElement("li");
     li.className = "session";
     li.innerHTML = `
@@ -765,9 +768,18 @@ els.rangeTabs.forEach((tab) =>
 );
 els.start.addEventListener("click", () => (isRunning() ? pause() : start()));
 els.navStart.addEventListener("click", () => (isRunning() ? pause() : start()));
-els.showMore.addEventListener("click", () => {
-  sessionsShown += 10;
-  renderSessions();
+els.showMore.addEventListener("click", async () => {
+  els.showMore.disabled = true;
+  try {
+    const page = await api(`/api/sessions?limit=10&before=${nextBefore}`);
+    allSessions = allSessions.concat(page.sessions);
+    nextBefore = page.nextBefore;
+    renderSessions();
+  } catch (err) {
+    showMessage(`Couldn't load more sessions. ${err.message}`, true);
+  } finally {
+    els.showMore.disabled = false;
+  }
 });
 els.reset.addEventListener("click", () => {
   els.completePanel.hidden = true;
