@@ -577,3 +577,87 @@ body[data-view="reports"] #today { display: none; }
 .today-list i { width: 10px; height: 10px; border-radius: 50%; }
 .today-list .today-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .today-list b { font-family: var(--mono); font-weight: 600; }
+
+/* =========================================================
+   Motion
+   - Entrances ease out, moves ease in-out, exits are ~20% shorter and ease in
+   - No bounce or overshoot: this is an app you use every day
+   - Everything is switched off for people who ask for reduced motion
+   ========================================================= */
+:root {
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+@keyframes pop-in { from { opacity: 0; transform: translateY(6px) scale(0.95); } }
+@keyframes pop-out { to { opacity: 0; transform: translateY(6px) scale(0.95); } }
+@keyframes drop-in { from { opacity: 0; transform: translateY(-4px); } }
+@keyframes row-in { from { opacity: 0; transform: translateY(6px); } }
+@keyframes grow-up { from { transform: scaleY(0); } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes icon-swap { from { opacity: 0; filter: blur(4px); transform: scale(0.8); } }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--short) 55%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
+
+/* 1, 10: toast and "Session complete" grow in from 0.95; 15: the toast leaves faster (160ms vs 200ms) */
+.toast:not([hidden]) { animation: pop-in 200ms var(--ease-out); }
+.toast.leaving { animation: pop-out 160ms var(--ease-in) forwards; }
+#complete-panel:not([hidden]) { animation: pop-in 220ms var(--ease-out); transform-origin: top center; }
+
+/* 2: anything inside an opened <details> (settings, table, recent sessions) drops in within 200ms */
+details[open] > :not(summary) { animation: drop-in 200ms var(--ease-out); }
+details summary::marker { transition: none; }
+
+/* 3: list rows appear 30ms apart, only the first time (see staggerOnce in timer.js) */
+.stagger > * { animation: row-in 260ms var(--ease-out) both; }
+.stagger > :nth-child(2) { animation-delay: 30ms; }
+.stagger > :nth-child(3) { animation-delay: 60ms; }
+.stagger > :nth-child(4) { animation-delay: 90ms; }
+.stagger > :nth-child(5) { animation-delay: 120ms; }
+.stagger > :nth-child(6) { animation-delay: 150ms; }
+.stagger > :nth-child(7) { animation-delay: 180ms; }
+.stagger > :nth-child(n + 8) { animation-delay: 210ms; }
+
+/* 4: buttons press in slightly */
+button, .btn, .preset, .tab, .round-btn, .icon-btn { transition: transform 100ms var(--ease-out), background-color 150ms, color 150ms; }
+button:active, .btn:active, .preset:active, .round-btn:active, .icon-btn:active { transform: scale(0.97); }
+
+/* 5: the switch knob stretches about 12% while it is pressed, then slides */
+.switch input::after { transition: transform 200ms var(--ease-in-out), width 120ms var(--ease-out); }
+.switch input:active::after { width: 22.4px; }
+.switch input:checked:active::after { transform: translateX(17.6px); }
+
+/* 6: report bars grow 30ms apart, then the legend settles in */
+.rstack { transform-origin: bottom; animation: grow-up 360ms var(--ease-out) both; }
+.rbar:nth-child(2) .rstack { animation-delay: 30ms; } .rbar:nth-child(3) .rstack { animation-delay: 60ms; }
+.rbar:nth-child(4) .rstack { animation-delay: 90ms; } .rbar:nth-child(5) .rstack { animation-delay: 120ms; }
+.rbar:nth-child(6) .rstack { animation-delay: 150ms; } .rbar:nth-child(n + 7) .rstack { animation-delay: 180ms; }
+.legend { animation: fade-in 240ms var(--ease-out) 220ms both; }
+
+/* 8: a soft ring when something was saved (new row in Today, Done tab after ticking a task) */
+.pulse { animation: pulse 600ms var(--ease-out); border-radius: 8px; }
+
+/* 9: the mode highlight slides between Focus / Short break / Long break */
+.tabs { position: relative; gap: 0; isolation: isolate; }
+.tabs::before {
+  content: ""; position: absolute; z-index: -1; top: 4px; bottom: 4px; left: 4px;
+  width: calc((100% - 8px) / 3); border-radius: 999px; background: var(--mode);
+  transform: translateX(calc(var(--tab, 0) * 100%));
+  transition: transform 260ms var(--ease-in-out), background-color 260ms var(--ease-in-out);
+}
+.tab[aria-pressed="true"] { background: transparent; }
+
+/* 18: the play / pause icon crossfades with a little blur */
+.icon-swap { animation: icon-swap 180ms var(--ease-out); }
+
+/* 11, 12, 16: Focus <-> Reports and focus mode crossfade, and the timer moves from where it was */
+#timer { view-transition-name: timer; }
+::view-transition-old(root) { animation: 160ms var(--ease-in) both fade-out-vt; }
+::view-transition-new(root) { animation: 220ms var(--ease-out) both fade-in; }
+::view-transition-group(timer) { animation-duration: 280ms; animation-timing-function: var(--ease-in-out); }
+@keyframes fade-out-vt { to { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after, ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) {
+    animation: none !important; transition: none !important;
+  }
+}
