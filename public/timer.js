@@ -128,7 +128,10 @@ function render() {
 
   const icon = isRunning() ? '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
   const action = isRunning() ? "Pause" : left < total ? "Resume" : "Start";
-  els.startIcon.innerHTML = icon;
+  if (els.startIcon.innerHTML !== icon) {
+    els.startIcon.innerHTML = icon;
+    replayAnimation(els.startIcon, "icon-swap");
+  }
   els.startLabel.textContent = action;
   // The small timers (bottom bar on phones, top bar on the Reports page) mirror the big one
   els.navTimes.forEach((el) => (el.textContent = format(left)));
@@ -136,6 +139,8 @@ function render() {
   els.navStarts.forEach((el) => el.setAttribute("aria-label", action));
 
   document.body.dataset.mode = mode;
+  // Position of the sliding highlight behind the Focus / Short break / Long break tabs
+  els.tabs[0].parentElement.style.setProperty("--tab", ["focus", "short", "long"].indexOf(mode));
   els.tabs.forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.mode === mode)));
 
   const every = Number(settings.every);
@@ -462,6 +467,7 @@ function renderSessions() {
     );
     els.sessionList.append(li);
   }
+  staggerOnce(els.sessionList);
 }
 
 // ---------- Tasks ----------
@@ -532,6 +538,7 @@ function renderTasks() {
     );
     els.taskList.append(li);
   }
+  staggerOnce(els.taskList);
 }
 
 function renderTaskSelect() {
@@ -559,7 +566,10 @@ async function toggleTask(t, done) {
     await api(`/api/tasks/${t.id}`, { method: "PATCH", body: JSON.stringify({ done }) });
     await loadTasks();
     // Ticked tasks move to the Done tab; say so, so it doesn't look like the task vanished
-    if (done) showUndo("Task moved to Done", () => toggleTask(t, false));
+    if (done) {
+      showUndo("Task moved to Done", () => toggleTask(t, false));
+      replayAnimation(document.querySelector('#tasks .filter [data-filter="done"]'), "pulse");
+    }
   } catch (err) {
     showMessage(err.message, true);
   }
@@ -588,6 +598,20 @@ async function addTask(event) {
 // Undo inside those 5 seconds simply puts the row back; nothing was deleted on the server.
 let pendingDelete = null;
 
+// The toast leaves with a short exit animation (a little faster than it came in), then hides
+function hideToast() {
+  if (els.toast.hidden) return;
+  if (reduceMotion()) {
+    els.toast.hidden = true;
+    return;
+  }
+  els.toast.classList.add("leaving");
+  setTimeout(() => {
+    els.toast.classList.remove("leaving");
+    els.toast.hidden = true;
+  }, 160);
+}
+
 function deleteWithUndo(row, text, doDelete) {
   if (pendingDelete) pendingDelete.commit(); // only one undo at a time
   row.hidden = true;
@@ -600,7 +624,7 @@ function deleteWithUndo(row, text, doDelete) {
       clearTimeout(timer);
       if (pendingDelete === entry) {
         pendingDelete = null;
-        els.toast.hidden = true;
+        hideToast();
       }
       try {
         await doDelete();
@@ -613,7 +637,7 @@ function deleteWithUndo(row, text, doDelete) {
     undo: () => {
       clearTimeout(timer);
       pendingDelete = null;
-      els.toast.hidden = true;
+      hideToast();
       row.hidden = false;
     },
   };
@@ -631,13 +655,13 @@ function showUndo(text, onUndo) {
       clearTimeout(timer);
       if (pendingDelete === entry) {
         pendingDelete = null;
-        els.toast.hidden = true;
+        hideToast();
       }
     },
     undo: () => {
       clearTimeout(timer);
       pendingDelete = null;
-      els.toast.hidden = true;
+      hideToast();
       onUndo();
     },
   };
@@ -753,7 +777,36 @@ function formatHour(h) {
   return `${h % 12 === 0 ? 12 : h % 12}${suffix}`;
 }
 
+// ---------- Motion helpers ----------
+function reduceMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+// Restart a CSS animation on an element (used for the play/pause icon and success pulses)
+function replayAnimation(el, className) {
+  if (!el || reduceMotion()) return;
+  el.classList.remove(className);
+  void el.offsetWidth; // forces the browser to notice the class was removed
+  el.classList.add(className);
+}
+
+// Rows fade in one after another (30ms apart), but only the first time a list appears,
+// so ticking a task or saving a session doesn't make the whole list dance again.
+function staggerOnce(list) {
+  if (!list || list.dataset.staggered) return;
+  list.dataset.staggered = "1";
+  list.classList.add("stagger");
+  setTimeout(() => list.classList.remove("stagger"), 800);
+}
+
+// Change the page (or focus mode) with a crossfade where the browser supports it
+function withTransition(update) {
+  if (!document.startViewTransition || reduceMotion()) return update();
+  document.startViewTransition(update);
+}
+
 // ---------- Today (Focus page) ----------
+let todayCount = null;
 // The sessions finished today, newest first, so the Focus page shows what you've already done.
 async function loadToday() {
   const list = $("today-list");
@@ -767,6 +820,8 @@ async function loadToday() {
       list.innerHTML = '<li class="empty">Nothing yet today. Finished sessions show up here.</li>';
       return;
     }
+    const isNew = todayCount !== null && done.length > todayCount;
+    todayCount = done.length;
     for (const s of done) {
       const li = document.createElement("li");
       li.innerHTML = '<span class="today-time"></span><i></i><span class="today-label"></span><b></b>';
@@ -782,6 +837,9 @@ async function loadToday() {
       li.querySelector("b").textContent = `${s.minutes}m`;
       list.append(li);
     }
+    staggerOnce(list);
+    // A session was just saved: pulse the new row so you see it landed
+    if (isNew) replayAnimation(list.firstElementChild, "pulse");
   } catch (err) {
     showMessage(`Couldn't load today's sessions. ${err.message}`, true);
   }
@@ -817,7 +875,7 @@ function showView() {
   });
   window.scrollTo(0, 0);
 }
-window.addEventListener("hashchange", showView);
+window.addEventListener("hashchange", () => withTransition(showView));
 showView();
 
 // ---------- Focus mode: only the timer on screen ----------
@@ -826,9 +884,11 @@ function setFocusMode(on) {
   els.focusModeBtn.setAttribute("aria-pressed", String(on));
   els.focusModeBtn.querySelector("span").textContent = on ? "Exit focus mode" : "Focus mode";
 }
-els.focusModeBtn.addEventListener("click", () => setFocusMode(!document.body.classList.contains("focus-mode")));
+els.focusModeBtn.addEventListener("click", () =>
+  withTransition(() => setFocusMode(!document.body.classList.contains("focus-mode"))),
+);
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && document.body.classList.contains("focus-mode")) setFocusMode(false);
+  if (e.key === "Escape" && document.body.classList.contains("focus-mode")) withTransition(() => setFocusMode(false));
 });
 els.showMore.addEventListener("click", async () => {
   els.showMore.disabled = true;
