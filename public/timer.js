@@ -753,7 +753,42 @@ function formatHour(h) {
   return `${h % 12 === 0 ? 12 : h % 12}${suffix}`;
 }
 
+// ---------- Today (Focus page) ----------
+// The sessions finished today, newest first, so the Focus page shows what you've already done.
+async function loadToday() {
+  const list = $("today-list");
+  try {
+    const { sessions } = await api("/api/sessions?limit=50");
+    const today = new Date().toDateString();
+    const done = sessions.filter((s) => new Date(s.started_at).toDateString() === today);
+    list.removeAttribute("aria-busy");
+    list.innerHTML = "";
+    if (done.length === 0) {
+      list.innerHTML = '<li class="empty">Nothing yet today. Finished sessions show up here.</li>';
+      return;
+    }
+    for (const s of done) {
+      const li = document.createElement("li");
+      li.innerHTML = '<span class="today-time"></span><i></i><span class="today-label"></span><b></b>';
+      li.querySelector(".today-time").textContent = new Date(s.started_at).toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      });
+      li.querySelector("i").className = `seg-${s.category}`;
+      li.querySelector("i").title = CATEGORY_NAMES[s.category];
+      // Add the task name only when it says something the label doesn't already
+      const sameAsTask = !s.task_title || s.task_title.startsWith(s.label) || s.label.startsWith(s.task_title);
+      li.querySelector(".today-label").textContent = sameAsTask ? s.label : `${s.label} · ${s.task_title}`;
+      li.querySelector("b").textContent = `${s.minutes}m`;
+      list.append(li);
+    }
+  } catch (err) {
+    showMessage(`Couldn't load today's sessions. ${err.message}`, true);
+  }
+}
+
 function refreshAll() {
+  loadToday();
   loadSessions();
   loadStats();
   loadReport();

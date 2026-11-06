@@ -158,6 +158,17 @@
           <ul class="list" id="task-list" aria-busy="true"><li class="skeleton skeleton-row"></li><li class="skeleton skeleton-row"></li><li class="skeleton skeleton-row"></li></ul>
         </section>
 
+        <!-- ===== Today (Focus page): what you've done so far today ===== -->
+        <section class="card" id="today" aria-labelledby="today-heading">
+          <div class="card-head"><h2 id="today-heading">Today</h2></div>
+          <div class="big-stats">
+            <div><b id="today-minutes"><span class="skeleton skeleton-num"></span></b><span>minutes</span></div>
+            <div><b id="today-count"><span class="skeleton skeleton-num"></span></b><span>sessions</span></div>
+            <div><b id="streak"><span class="skeleton skeleton-num"></span></b><span>day streak</span></div>
+          </div>
+          <ul class="today-list" id="today-list" aria-busy="true"><li class="skeleton skeleton-row"></li></ul>
+        </section>
+
         <!-- ===== Insights ===== -->
         <section class="card" id="insights" aria-labelledby="insights-heading">
           <div class="card-head">
@@ -167,11 +178,6 @@
               <button type="button" role="tab" data-range="week" aria-selected="true" aria-controls="report-chart">7 days</button>
               <button type="button" role="tab" data-range="month" aria-selected="false" aria-controls="report-chart">30 days</button>
             </div>
-          </div>
-          <div class="big-stats">
-            <div><b id="today-minutes"><span class="skeleton skeleton-num"></span></b><span>min today</span></div>
-            <div><b id="today-count"><span class="skeleton skeleton-num"></span></b><span>sessions today</span></div>
-            <div><b id="streak"><span class="skeleton skeleton-num"></span></b><span>day streak</span></div>
           </div>
           <div class="chart" id="report-chart" role="tabpanel" aria-labelledby="insights-heading">
             <div class="chart-total" id="report-total"><span class="skeleton"></span></div>

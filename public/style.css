@@ -565,3 +565,15 @@ body.focus-mode #time-display { font-size: clamp(3.2rem, 14vw, 4.6rem); }
 body.focus-mode .focus-mode-btn { position: fixed; top: 16px; right: 16px; }
 .focus-mode-btn { position: static; justify-self: end; margin: -4px 0 -10px; z-index: 2; }
 body.focus-mode .focus-mode-btn { position: fixed; top: 16px; right: 16px; margin: 0; }
+
+/* ---------- Today card (Focus page) ---------- */
+body[data-view="reports"] #today { display: none; }
+#today .big-stats { margin-bottom: 4px; }
+.today-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.today-list li { display: grid; grid-template-columns: 64px 10px 1fr auto; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 0.92rem; }
+.today-list li:last-child { border-bottom: 0; }
+.today-list li.empty, .today-list li.skeleton { display: block; }
+.today-time { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
+.today-list i { width: 10px; height: 10px; border-radius: 50%; }
+.today-list .today-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.today-list b { font-family: var(--mono); font-weight: 600; }
