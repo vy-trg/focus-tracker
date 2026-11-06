@@ -64,9 +64,11 @@ const els = {
   setAuto: $("set-auto"),
   setNotify: $("set-notify"),
   startLabel: $("start-label"),
-  navTime: $("nav-time"),
-  navStart: $("nav-start"),
-  navIcon: $("nav-icon"),
+  navTimes: document.querySelectorAll(".nav-time"),
+  navStarts: document.querySelectorAll(".nav-start"),
+  navIcons: document.querySelectorAll(".nav-icon"),
+  viewLinks: document.querySelectorAll("[data-view]"),
+  focusModeBtn: $("focus-mode-btn"),
   showMore: $("show-more"),
   taskForm: $("task-form"),
   taskTitle: $("task-title"),
@@ -128,10 +130,10 @@ function render() {
   const action = isRunning() ? "Pause" : left < total ? "Resume" : "Start";
   els.startIcon.innerHTML = icon;
   els.startLabel.textContent = action;
-  // The small timer in the bottom bar (phones) mirrors the big one
-  els.navTime.textContent = format(left);
-  els.navIcon.innerHTML = icon;
-  els.navStart.setAttribute("aria-label", action);
+  // The small timers (bottom bar on phones, top bar on the Reports page) mirror the big one
+  els.navTimes.forEach((el) => (el.textContent = format(left)));
+  els.navIcons.forEach((el) => (el.innerHTML = icon));
+  els.navStarts.forEach((el) => el.setAttribute("aria-label", action));
 
   document.body.dataset.mode = mode;
   els.tabs.forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.mode === mode)));
@@ -751,7 +753,42 @@ function formatHour(h) {
   return `${h % 12 === 0 ? 12 : h % 12}${suffix}`;
 }
 
+// ---------- Today (Focus page) ----------
+// The sessions finished today, newest first, so the Focus page shows what you've already done.
+async function loadToday() {
+  const list = $("today-list");
+  try {
+    const { sessions } = await api("/api/sessions?limit=50");
+    const today = new Date().toDateString();
+    const done = sessions.filter((s) => new Date(s.started_at).toDateString() === today);
+    list.removeAttribute("aria-busy");
+    list.innerHTML = "";
+    if (done.length === 0) {
+      list.innerHTML = '<li class="empty">Nothing yet today. Finished sessions show up here.</li>';
+      return;
+    }
+    for (const s of done) {
+      const li = document.createElement("li");
+      li.innerHTML = '<span class="today-time"></span><i></i><span class="today-label"></span><b></b>';
+      li.querySelector(".today-time").textContent = new Date(s.started_at).toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      });
+      li.querySelector("i").className = `seg-${s.category}`;
+      li.querySelector("i").title = CATEGORY_NAMES[s.category];
+      // Add the task name only when it says something the label doesn't already
+      const sameAsTask = !s.task_title || s.task_title.startsWith(s.label) || s.label.startsWith(s.task_title);
+      li.querySelector(".today-label").textContent = sameAsTask ? s.label : `${s.label} · ${s.task_title}`;
+      li.querySelector("b").textContent = `${s.minutes}m`;
+      list.append(li);
+    }
+  } catch (err) {
+    showMessage(`Couldn't load today's sessions. ${err.message}`, true);
+  }
+}
+
 function refreshAll() {
+  loadToday();
   loadSessions();
   loadStats();
   loadReport();
@@ -767,7 +804,32 @@ els.rangeTabs.forEach((tab) =>
   }),
 );
 els.start.addEventListener("click", () => (isRunning() ? pause() : start()));
-els.navStart.addEventListener("click", () => (isRunning() ? pause() : start()));
+els.navStarts.forEach((b) => b.addEventListener("click", () => (isRunning() ? pause() : start())));
+
+// ---------- Pages: Focus (timer + tasks) and Reports ----------
+// Switched in the page with the URL hash (#/ and #/reports), so a running timer never stops.
+function showView() {
+  const view = location.hash === "#/reports" ? "reports" : "focus";
+  document.body.dataset.view = view;
+  els.viewLinks.forEach((a) => {
+    if (a.dataset.view === view) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  });
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", showView);
+showView();
+
+// ---------- Focus mode: only the timer on screen ----------
+function setFocusMode(on) {
+  document.body.classList.toggle("focus-mode", on);
+  els.focusModeBtn.setAttribute("aria-pressed", String(on));
+  els.focusModeBtn.querySelector("span").textContent = on ? "Exit focus mode" : "Focus mode";
+}
+els.focusModeBtn.addEventListener("click", () => setFocusMode(!document.body.classList.contains("focus-mode")));
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && document.body.classList.contains("focus-mode")) setFocusMode(false);
+});
 els.showMore.addEventListener("click", async () => {
   els.showMore.disabled = true;
   try {
