@@ -820,6 +820,7 @@ async function loadToday() {
     const done = sessions.filter((s) => new Date(s.started_at).toDateString() === today);
     list.removeAttribute("aria-busy");
     list.innerHTML = "";
+    renderTimeline(done);
     if (done.length === 0) {
       list.innerHTML = '<li class="empty">Nothing yet today. Finished sessions show up here.</li>';
       return;
@@ -829,7 +830,9 @@ async function loadToday() {
     for (const s of done) {
       const li = document.createElement("li");
       li.innerHTML = '<span class="today-time"></span><i></i><span class="today-label"></span><b></b>';
-      li.querySelector(".today-time").textContent = new Date(s.started_at).toLocaleTimeString([], {
+      // started_at is when the session was saved (its end), so show when it began, like the timeline
+      const began = new Date(new Date(s.started_at).getTime() - s.minutes * 60000);
+      li.querySelector(".today-time").textContent = began.toLocaleTimeString([], {
         hour: "numeric",
         minute: "2-digit",
       });
@@ -846,6 +849,51 @@ async function loadToday() {
     if (isNew) replayAnimation(list.firstElementChild, "pulse");
   } catch (err) {
     showMessage(`Couldn't load today's sessions. ${err.message}`, true);
+  }
+}
+
+// ---------- Today's timeline ----------
+// A session is saved when it ends, so started_at is the end time; the block runs back `minutes`.
+// The day shown is 6 am to 10 pm, stretched if you focused earlier or later than that.
+function renderTimeline(sessions) {
+  const box = $("day-timeline");
+  box.hidden = sessions.length === 0;
+  if (box.hidden) return;
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  const hourOf = (d) => (d - midnight) / 3600000;
+  const blocks = sessions.map((s) => {
+    const end = hourOf(new Date(s.started_at));
+    return { s, start: Math.max(0, end - s.minutes / 60), end };
+  });
+  const from = Math.min(6, Math.floor(Math.min(...blocks.map((b) => b.start))));
+  const to = Math.max(22, Math.ceil(Math.max(...blocks.map((b) => b.end), hourOf(new Date()))));
+  const pct = (h) => `${((h - from) / (to - from)) * 100}%`;
+
+  const track = $("tl-track");
+  track.innerHTML = "";
+  track.setAttribute("role", "img");
+  track.setAttribute("aria-label", `Today's sessions: ${blocks.map((b) => `${b.s.minutes} minutes ${CATEGORY_NAMES[b.s.category]}`).join(", ")}`);
+  for (const b of blocks) {
+    const el = document.createElement("i");
+    el.className = `tl-block seg-${b.s.category}`;
+    el.style.left = pct(b.start);
+    el.style.width = `max(3px, calc(${pct(b.end)} - ${pct(b.start)}))`;
+    el.title = `${b.s.label} · ${b.s.minutes}m · ${CATEGORY_NAMES[b.s.category]}`;
+    track.append(el);
+  }
+  const now = document.createElement("span");
+  now.className = "tl-now";
+  now.style.left = pct(Math.min(to, hourOf(new Date())));
+  track.append(now);
+
+  const hours = $("tl-hours");
+  hours.innerHTML = "";
+  for (let h = Math.ceil(from / 3) * 3; h <= to; h += 3) {
+    const t = document.createElement("span");
+    t.style.left = pct(h);
+    t.textContent = `${h % 12 || 12}${h < 12 || h === 24 ? "am" : "pm"}`;
+    hours.append(t);
   }
 }
 

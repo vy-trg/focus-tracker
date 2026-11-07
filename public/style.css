@@ -680,3 +680,13 @@ button:active, .btn:active, .preset:active, .round-btn:active, .icon-btn:active 
 #lofi-volume { accent-color: var(--focus); width: 110px; }
 /* Focus mode keeps the music playing; only the controls hide */
 body.focus-mode .lofi { display: none; }
+
+/* ---------- Today's timeline ---------- */
+.day-timeline { margin: 4px 0 10px; }
+.tl-track { position: relative; height: 18px; border-radius: 6px; background: var(--bg); overflow: hidden; }
+.tl-block { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+.tl-now { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: 0.35; }
+.tl-hours { position: relative; height: 16px; margin-top: 3px; font: 0.68rem var(--mono); color: var(--muted); }
+.tl-hours span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.tl-hours span:first-child { transform: none; }
+.tl-hours span:last-child { transform: translateX(-100%); }

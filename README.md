@@ -33,6 +33,7 @@ Focus Tracker times each session with built-in breaks, saves it under a category
 - **Sessions saved automatically** when the timer finishes (`POST /api/sessions`), with a 1–5 rating afterwards.
 - **History** that loads 20 sessions at a time, and **stats**: today, all time, last 7 days, streak and best hour.
 - **Focus mode** hides everything except the timer.
+- **Today on a timeline:** each session is a coloured block at the time you did it, so you can see how your day went at a glance.
 - **Streak:** days in a row with at least one session, your best streak, and the last 7 days as dots.
 - **Background sound** while you focus: rain, ocean waves or soft noise, made in the browser with the Web Audio API (no audio files). It fades out on pause and during breaks.
 - **Accurate on phones:** the timer counts down to a fixed end time, so it stays correct even when the phone slows down a background tab.
