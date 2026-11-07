@@ -1,6 +1,6 @@
 const pool = require("./pool");
 const { CATEGORIES } = require("../validation");
-const { countStreak } = require("../streak");
+const { countStreak, longestStreak } = require("../streak");
 
 // Every query filters on user_id, so a user can only ever see or change their own rows.
 
@@ -103,6 +103,7 @@ async function getStats(userId) {
     allTime: allTime.rows[0],
     week: week.rows.map((r) => ({ day: toIsoDate(r.day), minutes: r.minutes })),
     streak: countStreak(days.rows.map((r) => toIsoDate(r.day)), todayInBrisbane()),
+    bestStreak: longestStreak(days.rows.map((r) => toIsoDate(r.day))),
     bestHour: bestHour.rows[0] ? bestHour.rows[0].hour : null,
   };
 }

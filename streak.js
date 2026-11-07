@@ -17,4 +17,19 @@ function countStreak(days, today) {
   return streak;
 }
 
-module.exports = { countStreak };
+// Longest run of consecutive days ever (within the days given). Same input as countStreak.
+function longestStreak(days) {
+  const sorted = [...new Set(days)].sort();
+  let best = 0;
+  let run = 0;
+  let prev = null;
+  for (const iso of sorted) {
+    const gap = prev ? (new Date(`${iso}T00:00:00Z`) - new Date(`${prev}T00:00:00Z`)) / 86400000 : null;
+    run = gap === 1 ? run + 1 : 1;
+    best = Math.max(best, run);
+    prev = iso;
+  }
+  return best;
+}
+
+module.exports = { countStreak, longestStreak };

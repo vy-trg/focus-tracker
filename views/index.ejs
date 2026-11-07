@@ -100,6 +100,17 @@
             </div>
           </div>
           <div class="presets" role="group" aria-label="Pomodoro style"></div>
+          <!-- Background sound, made in the browser with Web Audio (no audio files). Plays during focus only. -->
+          <div class="ambient">
+            <label for="ambient-select">Background sound</label>
+            <select id="ambient-select">
+              <option value="off">Off</option>
+              <option value="rain">Rain</option>
+              <option value="ocean">Ocean waves</option>
+              <option value="brown">Soft noise</option>
+            </select>
+            <input type="range" id="ambient-volume" min="0" max="1" step="0.05" aria-label="Background sound volume">
+          </div>
           <p id="message" role="status"></p>
         </div>
 
@@ -165,6 +176,11 @@
             <div><b id="today-minutes"><span class="skeleton skeleton-num"></span></b><span>minutes</span></div>
             <div><b id="today-count"><span class="skeleton skeleton-num"></span></b><span>sessions</span></div>
             <div><b id="streak"><span class="skeleton skeleton-num"></span></b><span>day streak</span></div>
+          </div>
+          <!-- Last 7 days: a filled dot for each day with at least one session -->
+          <div class="streak-row">
+            <ol class="week-dots" id="week-dots" aria-label="Days you focused this week"></ol>
+            <p class="streak-note" id="streak-note"></p>
           </div>
           <ul class="today-list" id="today-list" aria-busy="true"><li class="skeleton skeleton-row"></li></ul>
         </section>
