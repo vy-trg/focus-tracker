@@ -1,9 +1,11 @@
 # Focus Tracker ⏱️
 ![CI](https://github.com/vy-trg/focus-tracker/actions/workflows/ci.yml/badge.svg)
 
-A Pomodoro timer that saves every finished focus session to PostgreSQL and shows how much you focused today. Built with Express and a small REST API; the browser talks to the API with `fetch`.
+A Pomodoro timer with built-in breaks that saves every focus session to your own account, by category, and shows where your week went. Built with Express, PostgreSQL and a small REST API; the browser talks to the API with `fetch`.
 
 🔗 **[Live Demo](https://focus-tracker-2ooe.onrender.com)** *(free hosting: the first load can take 30–60 seconds while the server wakes up)*
+
+<p align="center"><img src="docs/hero.png" alt="Focus Tracker landing page: a timer preview with status chips, three feature tiles and a Built with row" width="720"></p>
 
 <p align="center">
   <picture>
@@ -14,12 +16,23 @@ A Pomodoro timer that saves every finished focus session to PostgreSQL and shows
 
 ---
 
+## The problem
+
+Between uni and hospitality shifts, I didn't know how much focused study I actually did each week, or which subject it went to. Timers on my phone forget every session as soon as they end, and notes apps don't add anything up.
+
+Focus Tracker times each session with built-in breaks, saves it under a category (study, reading, work or journal) to my own account, and shows today, 7 or 30 days split by category. Success means: at the end of a week I can say how many hours went to study, without guessing.
+
+---
+
 ## Features
 
 - **User accounts:** sign up and log in; each person only sees, adds and deletes their own sessions.
-- **25-minute focus timer** with Start, Pause/Resume and Reset. The countdown also shows in the browser tab.
-- **Sessions saved automatically** when the timer finishes (`POST /api/sessions`).
-- **Recent sessions** list with delete, and **stats** for today and all time.
+- **Focus timer with breaks:** Focus, Short break and Long break, with presets (25/5, 50/10, 90/20, 15/3) or your own times. Breaks can start on their own. The countdown also shows in the browser tab.
+- **Categories and a to-do list:** tag each session as study, reading, work or journal, and link it to a task.
+- **Reports:** minutes per day for today, 7 or 30 days, split by category.
+- **Sessions saved automatically** when the timer finishes (`POST /api/sessions`), with a 1–5 rating afterwards.
+- **History** that loads 20 sessions at a time, and **stats**: today, all time, last 7 days, streak and best hour.
+- **Focus mode** hides everything except the timer.
 - **Accurate on phones:** the timer counts down to a fixed end time, so it stays correct even when the phone slows down a background tab.
 - **Validation on the server and in the database:** labels must be 1–60 characters and minutes 1–180; bad input gets a `400` with a clear message.
 - **"Today" means today in Brisbane:** the database runs in UTC, so stats convert to `Australia/Brisbane` first.
@@ -148,6 +161,19 @@ test/              Unit tests (npm test)
 Dockerfile         Builds the app image (Node 22, runs as a non-root user)
 compose.yaml       Local app + PostgreSQL for development
 ```
+
+---
+
+## UX details
+
+Small decisions, each made on purpose:
+
+- Deleting a session shows an **Undo** toast instead of a "Are you sure?" dialog: fewer clicks, and mistakes are still easy to fix.
+- The landing page only shows features that exist; a test fails if a feature tile mentions something the app doesn't have.
+- The timer counts down to a fixed end time, so it stays right when a phone slows down a background tab.
+- Animations use the View Transitions API and turn off when the system asks for reduced motion.
+- Reports show days with no sessions as empty columns, so a day off is visible instead of skipped.
+- Wrong username and wrong password show the same login message, so the page doesn't reveal who has an account.
 
 ---
 

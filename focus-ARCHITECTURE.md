@@ -1,5 +1,7 @@
 # Focus Tracker – Architecture
 
+Updated 8 Nov: accounts, categories, tasks, reports, CI and Docker.
+
 ## 1. Architecture diagram
 
 Components, libraries, servers and APIs, and how they connect.
@@ -7,33 +9,38 @@ Components, libraries, servers and APIs, and how they connect.
 ```mermaid
 flowchart LR
     subgraph Browser["Browser (desktop or phone)"]
-        UI["index.ejs page<br/>style.css"]
+        UI["landing.ejs, index.ejs,<br/>login/signup.ejs + style.css"]
         JS["timer.js<br/>vanilla JS, fetch()"]
     end
 
     subgraph Render["Render – free web service"]
         subgraph Node["Node.js + Express 5 (app.js)"]
-            Static["express.static<br/>serves timer.js, style.css"]
-            View["GET /<br/>EJS view"]
-            API["REST API<br/>/api/sessions, /api/stats, /api/health"]
-            Val["Validation<br/>validateSession(), parseId()"]
+            Sec["helmet + express-rate-limit"]
+            Auth["Passport local + bcrypt<br/>express-session (cookie)"]
+            View["GET / → landing or app<br/>/login, /signup, /logout"]
+            API["REST API (requireAuth)<br/>/api/sessions, /api/tasks,<br/>/api/stats, /api/reports"]
+            Val["validation.js<br/>validateSession(), parseRange()…"]
         end
-        Q["db/queries.js<br/>SQL with $1 parameters"]
-        Pool["db/pool.js<br/>pg Pool + SSL"]
+        Q["db/queries.js<br/>SQL with $1, every query filters by user_id"]
+        Pool["db/pool.js<br/>pg Pool, SSL verify-full"]
     end
 
-    Env[("DATABASE_URL<br/>.env locally,<br/>Render env var in production")]
-    DB[("Neon PostgreSQL<br/>sessions table")]
-    GH["GitHub repo"]
+    DB[("Neon PostgreSQL<br/>users, sessions, tasks,<br/>user_sessions")]
+    subgraph GH["GitHub"]
+        CI["Actions on every PR<br/>tests · gitleaks · Docker build"]
+        Main["main (protected)"]
+    end
+    Docker["docker compose<br/>app + Postgres locally"]
 
-    UI -- "1. GET / (page)" --> View
-    Static -- "2. timer.js, style.css" --> UI
     UI --- JS
-    JS -- "3. JSON over HTTP" --> API
+    UI -- "pages" --> View
+    JS -- "JSON over HTTP + session cookie" --> Sec --> Auth --> API
     API --> Val --> Q --> Pool
-    Pool -- "TLS, Neon pooler endpoint" --> DB
-    Env -. "read at startup" .-> Pool
-    GH -. "auto-deploy on push" .-> Render
+    Auth --> Q
+    Pool -- "TLS" --> DB
+    CI -. "green before merge" .-> Main
+    Main -. "auto-deploy" .-> Render
+    Docker -. "same app, local database" .-> Node
 ```
 
 | Layer | Technology |
