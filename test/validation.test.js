@@ -126,3 +126,11 @@ test("parseLimit rejects anything outside 1 to 100", () => {
     assert.equal(parseLimit(raw), null, `raw=${raw}`);
   }
 });
+
+const { longestStreak } = require("../streak");
+
+test("longestStreak finds the longest run of days in a row, wherever it is", () => {
+  assert.equal(longestStreak(["2026-11-05", "2026-11-04", "2026-10-20", "2026-10-19", "2026-10-18"]), 3);
+  assert.equal(longestStreak(["2026-03-01", "2026-02-28"]), 2); // across a month end
+  assert.equal(longestStreak([]), 0);
+});

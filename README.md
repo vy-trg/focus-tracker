@@ -33,6 +33,8 @@ Focus Tracker times each session with built-in breaks, saves it under a category
 - **Sessions saved automatically** when the timer finishes (`POST /api/sessions`), with a 1–5 rating afterwards.
 - **History** that loads 20 sessions at a time, and **stats**: today, all time, last 7 days, streak and best hour.
 - **Focus mode** hides everything except the timer.
+- **Streak:** days in a row with at least one session, your best streak, and the last 7 days as dots.
+- **Background sound** while you focus: rain, ocean waves or soft noise, made in the browser with the Web Audio API (no audio files). It fades out on pause and during breaks.
 - **Accurate on phones:** the timer counts down to a fixed end time, so it stays correct even when the phone slows down a background tab.
 - **Validation on the server and in the database:** labels must be 1–60 characters and minutes 1–180; bad input gets a `400` with a clear message.
 - **"Today" means today in Brisbane:** the database runs in UTC, so stats convert to `Australia/Brisbane` first.
@@ -173,6 +175,8 @@ Small decisions, each made on purpose:
 - The timer counts down to a fixed end time, so it stays right when a phone slows down a background tab.
 - Animations use the View Transitions API and turn off when the system asks for reduced motion.
 - Reports show days with no sessions as empty columns, so a day off is visible instead of skipped.
+- The streak note nudges instead of scolding: "One session today keeps your 3-day streak going."
+- Background sound only plays while a focus session runs, so breaks are quiet.
 - Wrong username and wrong password show the same login message, so the page doesn't reveal who has an account.
 
 ---

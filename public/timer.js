@@ -8,7 +8,7 @@ const PRESETS = {
   deep: { focus: 90, short: 20, long: 30, name: "Deep work", hint: "Big tasks" },
   sprint: { focus: 15, short: 3, long: 10, name: "Sprint", hint: "Get started" },
 };
-const DEFAULTS = { preset: "classic", ...PRESETS.classic, every: 4, sound: true, notify: false, auto: true };
+const DEFAULTS = { preset: "classic", ...PRESETS.classic, every: 4, sound: true, notify: false, auto: true, ambient: "off", ambientVolume: 0.5 };
 
 // localStorage can throw (private mode, blocked storage), so every access is wrapped
 function loadSettings() {
@@ -27,6 +27,8 @@ function saveSettings() {
   }
 }
 let settings = loadSettings();
+// Set once the background sound code below has loaded; render() calls it on every tick
+let syncSound = () => {};
 
 // Test mode, only on your own computer: http://localhost:3000/?fast counts seconds instead of minutes
 const FAST = location.hostname === "localhost" && new URLSearchParams(location.search).has("fast");
@@ -151,6 +153,7 @@ function render() {
     els.roundDots.append(dot);
   }
   els.roundText.textContent = `Session ${Math.min(round + 1, every)} of ${every}`;
+  syncSound();
 }
 
 function setMode(next) {
@@ -675,6 +678,7 @@ async function loadStats() {
     $("today-minutes").textContent = stats.today.total_minutes;
     $("today-count").textContent = stats.today.count;
     $("streak").textContent = stats.streak;
+    renderStreak(stats);
     $("all-minutes").textContent = stats.allTime.total_minutes;
     $("all-count").textContent = stats.allTime.count;
 
@@ -945,3 +949,157 @@ fillSettingsForm();
 renderPresets();
 render();
 refreshAll();
+
+// ---------- Streak: last 7 days and a short note ----------
+function renderStreak(stats) {
+  const dots = $("week-dots");
+  dots.innerHTML = "";
+  for (const d of stats.week) {
+    const li = document.createElement("li");
+    const date = new Date(`${d.day}T00:00:00Z`);
+    const name = date.toLocaleDateString("en-AU", { weekday: "long", timeZone: "UTC" });
+    li.textContent = name[0];
+    li.className = d.minutes > 0 ? "on" : "";
+    li.title = `${name}: ${d.minutes} min`;
+    li.setAttribute("aria-label", `${name}, ${d.minutes > 0 ? `${d.minutes} minutes` : "no focus"}`);
+    dots.append(li);
+  }
+  const focusedToday = stats.today.count > 0;
+  let note;
+  if (stats.streak === 0) note = "Finish one session today to start a streak.";
+  else if (!focusedToday) note = `One session today keeps your ${stats.streak}-day streak going.`;
+  else if (stats.streak >= stats.bestStreak && stats.streak > 1) note = "Your longest streak yet.";
+  else note = `Best: ${stats.bestStreak} day${stats.bestStreak === 1 ? "" : "s"}`;
+  $("streak-note").textContent = note;
+}
+
+// ---------- Background sound ----------
+// Rain, ocean and soft noise are made from filtered noise with the Web Audio API, so there are
+// no audio files to download or license. Sound plays only while a focus session is running,
+// and fades out on pause, reset and breaks.
+const ambient = (() => {
+  let ctx = null;
+  let master = null;
+  let source = null;
+  let playing = null; // which sound is running now, or null
+  let previewTimer = null;
+
+  function noiseBuffer(kind) {
+    const length = ctx.sampleRate * 4;
+    const buf = ctx.createBuffer(1, length, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    let last = 0;
+    const b = [0, 0, 0, 0, 0, 0, 0];
+    for (let i = 0; i < length; i++) {
+      const white = Math.random() * 2 - 1;
+      if (kind === "brown") {
+        last = (last + 0.02 * white) / 1.02;
+        data[i] = last * 3.5;
+      } else {
+        // Pink noise (Paul Kellet's filter): softer than white noise, closer to rain
+        b[0] = 0.99886 * b[0] + white * 0.0555179; b[1] = 0.99332 * b[1] + white * 0.0750759;
+        b[2] = 0.969 * b[2] + white * 0.153852; b[3] = 0.8665 * b[3] + white * 0.3104856;
+        b[4] = 0.55 * b[4] + white * 0.5329522; b[5] = -0.7616 * b[5] - white * 0.016898;
+        data[i] = (b[0] + b[1] + b[2] + b[3] + b[4] + b[5] + b[6] + white * 0.5362) * 0.11;
+        b[6] = white * 0.115926;
+      }
+    }
+    return buf;
+  }
+
+  function build(kind) {
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuffer(kind === "rain" ? "pink" : "brown");
+    src.loop = true;
+    const filter = ctx.createBiquadFilter();
+    const level = ctx.createGain();
+    if (kind === "rain") {
+      filter.type = "bandpass"; filter.frequency.value = 1800; filter.Q.value = 0.4;
+      level.gain.value = 0.9;
+    } else if (kind === "ocean") {
+      // Waves: the volume rises and falls about every 9 seconds
+      filter.type = "lowpass"; filter.frequency.value = 700;
+      level.gain.value = 0.55;
+      const lfo = ctx.createOscillator();
+      const depth = ctx.createGain();
+      lfo.frequency.value = 0.11; depth.gain.value = 0.45;
+      lfo.connect(depth).connect(level.gain);
+      lfo.start();
+      src.addEventListener("ended", () => lfo.stop());
+    } else {
+      filter.type = "lowpass"; filter.frequency.value = 500;
+      level.gain.value = 0.8;
+    }
+    src.connect(filter).connect(level).connect(master);
+    src.start();
+    return src;
+  }
+
+  function ensureContext() {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return false;
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = 0;
+      master.connect(ctx.destination);
+    }
+    if (ctx.state === "suspended") ctx.resume();
+    return true;
+  }
+
+  function play(kind) {
+    if (!ensureContext()) return;
+    if (playing !== kind) {
+      if (source) source.stop(ctx.currentTime + 0.6);
+      source = build(kind);
+      playing = kind;
+    }
+    master.gain.setTargetAtTime(settings.ambientVolume * 0.35, ctx.currentTime, 0.4);
+  }
+
+  function silence() {
+    if (!ctx || !playing) return;
+    master.gain.setTargetAtTime(0, ctx.currentTime, 0.25);
+    const old = source;
+    setTimeout(() => { if (source === old && master.gain.value < 0.01) { old.stop(); source = null; playing = null; } }, 1500);
+  }
+
+  return {
+    // Called from render(): sound on while focusing, off otherwise. Cheap when nothing changes.
+    sync(focusing) {
+      if (previewTimer) return;
+      const want = focusing && settings.ambient !== "off" ? settings.ambient : null;
+      if (want && (want !== playing || master.gain.value === 0)) play(want);
+      else if (!want && playing) silence();
+    },
+    // A short sample when you pick a sound, so you know what it is
+    preview() {
+      clearTimeout(previewTimer);
+      if (settings.ambient === "off") { previewTimer = null; silence(); return; }
+      play(settings.ambient);
+      previewTimer = setTimeout(() => { previewTimer = null; ambient.sync(Boolean(tick) && mode === "focus"); }, 2500);
+    },
+    volume() {
+      if (ctx && playing) master.gain.setTargetAtTime(settings.ambientVolume * 0.35, ctx.currentTime, 0.1);
+    },
+  };
+})();
+
+const ambientSelect = $("ambient-select");
+const ambientVolume = $("ambient-volume");
+ambientSelect.value = settings.ambient;
+ambientVolume.value = settings.ambientVolume;
+ambientVolume.disabled = settings.ambient === "off";
+ambientSelect.addEventListener("change", () => {
+  settings.ambient = ambientSelect.value;
+  ambientVolume.disabled = settings.ambient === "off";
+  saveSettings();
+  ambient.preview();
+});
+ambientVolume.addEventListener("input", () => {
+  settings.ambientVolume = Number(ambientVolume.value);
+  saveSettings();
+  ambient.volume();
+});
+syncSound = () => ambient.sync(Boolean(tick) && mode === "focus");
