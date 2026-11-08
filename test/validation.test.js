@@ -134,3 +134,23 @@ test("longestStreak finds the longest run of days in a row, wherever it is", () 
   assert.equal(longestStreak(["2026-03-01", "2026-02-28"]), 2); // across a month end
   assert.equal(longestStreak([]), 0);
 });
+
+const { validateHabit } = require("../validation");
+
+test("validateHabit accepts a complete habit", () => {
+  assert.deepEqual(validateHabit({ name: "Study", category: "study", target_sessions: 2 }), []);
+});
+
+test("validateHabit explains each wrong field", () => {
+  const errors = validateHabit({ name: "  ", category: "gaming", target_sessions: 0 });
+  assert.deepEqual(errors.map((e) => e.field), ["name", "category", "target_sessions"]);
+  assert.equal(validateHabit({ name: "x".repeat(61), category: "study", target_sessions: 1 })[0].field, "name");
+  assert.equal(validateHabit({ name: "Read", category: "reading", target_sessions: 1.5 })[0].field, "target_sessions");
+  assert.equal(validateHabit({ name: "Read", category: "reading", target_sessions: "2" })[0].field, "target_sessions");
+});
+
+test("validateHabit for PATCH: any one field is enough, an empty body is not", () => {
+  assert.deepEqual(validateHabit({ target_sessions: 3 }, true), []);
+  assert.deepEqual(validateHabit({}, true).map((e) => e.field), ["body"]);
+  assert.equal(validateHabit({ category: "nap" }, true)[0].field, "category");
+});
