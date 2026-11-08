@@ -49,6 +49,31 @@ function validateTask({ title, estimate } = {}) {
   return errors;
 }
 
+// A habit: a name, one of the categories, and how many sessions a day count as done (1-12).
+// For PATCH (partial = true) every field is optional, but at least one must be sent.
+function validateHabit({ name, category, target_sessions } = {}, partial = false) {
+  const errors = [];
+  if (partial && name === undefined && category === undefined && target_sessions === undefined) {
+    return [{ field: "body", message: "Send name, category or target_sessions" }];
+  }
+  if (!partial || name !== undefined) {
+    if (typeof name !== "string" || name.trim().length === 0 || name.trim().length > 60) {
+      errors.push({ field: "name", message: "Name must be 1-60 characters" });
+    }
+  }
+  if (!partial || category !== undefined) {
+    if (!CATEGORIES.includes(category)) {
+      errors.push({ field: "category", message: `Category must be one of: ${CATEGORIES.join(", ")}` });
+    }
+  }
+  if (!partial || target_sessions !== undefined) {
+    if (!Number.isInteger(target_sessions) || target_sessions < 1 || target_sessions > 12) {
+      errors.push({ field: "target_sessions", message: "Target must be a whole number from 1 to 12 sessions a day" });
+    }
+  }
+  return errors;
+}
+
 // "How focused did you feel?" is a whole number from 1 to 5.
 function validateRating(rating) {
   return Number.isInteger(rating) && rating >= 1 && rating <= 5
@@ -92,4 +117,5 @@ module.exports = {
   validateTaskTitle,
   validateTaskUpdate,
   validateRating,
+  validateHabit,
 };

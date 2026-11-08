@@ -17,6 +17,7 @@ const {
   parseId,
   parseRange,
   parseLimit,
+  validateHabit,
 } = require("./validation");
 
 const app = express();
@@ -142,6 +143,7 @@ app.get("/", (req, res) => {
 app.use("/api/sessions", requireAuth);
 app.use("/api/stats", requireAuth);
 app.use("/api/tasks", requireAuth);
+app.use("/api/habits", requireAuth);
 app.use("/api/reports", requireAuth);
 
 app.get("/api/health", (req, res) => {
@@ -310,6 +312,76 @@ app.delete("/api/tasks/:id", async (req, res) => {
     const rowCount = await db.deleteTask(taskId, req.user.id);
     if (rowCount === 0) {
       return res.status(404).json({ error: "Task not found" });
+    }
+    res.status(204).send();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server Error" });
+  }
+});
+
+// ---------- Habits ----------
+// "2 study sessions a day". Tomorrow: done-today and streak worked out from sessions.
+
+app.get("/api/habits", async (req, res) => {
+  try {
+    res.json(await db.getHabits(req.user.id));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server Error" });
+  }
+});
+
+app.post("/api/habits", async (req, res) => {
+  try {
+    const errors = validateHabit(req.body);
+    if (errors.length > 0) {
+      return res.status(400).json({ errors });
+    }
+    const { name, category, target_sessions } = req.body;
+    const habit = await db.insertHabit(req.user.id, { name: name.trim(), category, target_sessions });
+    res.status(201).json(habit);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server Error" });
+  }
+});
+
+app.patch("/api/habits/:id", async (req, res) => {
+  try {
+    const habitId = parseId(req.params.id);
+    if (habitId === null) {
+      return res.status(400).json({ error: "Id must be a positive whole number" });
+    }
+    const errors = validateHabit(req.body, true);
+    if (errors.length > 0) {
+      return res.status(400).json({ errors });
+    }
+    const { name, category, target_sessions } = req.body;
+    const habit = await db.updateHabit(habitId, req.user.id, {
+      name: typeof name === "string" ? name.trim() : undefined,
+      category,
+      target_sessions,
+    });
+    if (!habit) {
+      return res.status(404).json({ error: "Habit not found" }); // not found OR not yours
+    }
+    res.json(habit);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server Error" });
+  }
+});
+
+app.delete("/api/habits/:id", async (req, res) => {
+  try {
+    const habitId = parseId(req.params.id);
+    if (habitId === null) {
+      return res.status(400).json({ error: "Id must be a positive whole number" });
+    }
+    const rowCount = await db.deleteHabit(habitId, req.user.id);
+    if (rowCount === 0) {
+      return res.status(404).json({ error: "Habit not found" });
     }
     res.status(204).send();
   } catch (err) {

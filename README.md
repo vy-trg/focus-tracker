@@ -72,6 +72,8 @@ Focus Tracker times each session with built-in breaks, saves it under a category
 | `GET` | `/api/reports?range=day\|week\|month` | **Requires login.** Minutes per day and category for 1, 7 or 30 days (Brisbane time, from midnight; empty days included) and totals. Other ranges return `400` |
 | `GET`, `POST` | `/api/tasks` | **Requires login.** Your to-do list / add a task: `{ "title": "...", "estimate": 1-12 }` |
 | `PATCH`, `DELETE` | `/api/tasks/:id` | **Requires login.** Mark done or rename / delete. `404` if the task isn't yours |
+| `GET`, `POST` | `/api/habits` | **Requires login.** Your habits / add one: `{ "name": "Study", "category": "study", "target_sessions": 2 }` |
+| `PATCH`, `DELETE` | `/api/habits/:id` | **Requires login.** Change any field / delete. `404` if the habit isn't yours |
 | `GET` | `/api/health` | `{ ok: true }` (no login needed) |
 
 API routes that require login return `401 { "error": "Please log in" }` without a valid session cookie. `/api` allows 100 requests per 15 minutes per IP; `/login` and `/signup` allow 10.
