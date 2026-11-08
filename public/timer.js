@@ -8,7 +8,7 @@ const PRESETS = {
   deep: { focus: 90, short: 20, long: 30, name: "Deep work", hint: "Big tasks" },
   sprint: { focus: 15, short: 3, long: 10, name: "Sprint", hint: "Get started" },
 };
-const DEFAULTS = { preset: "classic", ...PRESETS.classic, every: 4, sound: true, notify: false, auto: true, ambient: "off", ambientVolume: 0.5 };
+const DEFAULTS = { preset: "classic", ...PRESETS.classic, every: 4, sound: true, notify: false, auto: true, lofi: false, lofiVolume: 0.5 };
 
 // localStorage can throw (private mode, blocked storage), so every access is wrapped
 function loadSettings() {
@@ -820,6 +820,7 @@ async function loadToday() {
     const done = sessions.filter((s) => new Date(s.started_at).toDateString() === today);
     list.removeAttribute("aria-busy");
     list.innerHTML = "";
+    renderTimeline(done);
     if (done.length === 0) {
       list.innerHTML = '<li class="empty">Nothing yet today. Finished sessions show up here.</li>';
       return;
@@ -829,7 +830,9 @@ async function loadToday() {
     for (const s of done) {
       const li = document.createElement("li");
       li.innerHTML = '<span class="today-time"></span><i></i><span class="today-label"></span><b></b>';
-      li.querySelector(".today-time").textContent = new Date(s.started_at).toLocaleTimeString([], {
+      // started_at is when the session was saved (its end), so show when it began, like the timeline
+      const began = new Date(new Date(s.started_at).getTime() - s.minutes * 60000);
+      li.querySelector(".today-time").textContent = began.toLocaleTimeString([], {
         hour: "numeric",
         minute: "2-digit",
       });
@@ -846,6 +849,51 @@ async function loadToday() {
     if (isNew) replayAnimation(list.firstElementChild, "pulse");
   } catch (err) {
     showMessage(`Couldn't load today's sessions. ${err.message}`, true);
+  }
+}
+
+// ---------- Today's timeline ----------
+// A session is saved when it ends, so started_at is the end time; the block runs back `minutes`.
+// The day shown is 6 am to 10 pm, stretched if you focused earlier or later than that.
+function renderTimeline(sessions) {
+  const box = $("day-timeline");
+  box.hidden = sessions.length === 0;
+  if (box.hidden) return;
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  const hourOf = (d) => (d - midnight) / 3600000;
+  const blocks = sessions.map((s) => {
+    const end = hourOf(new Date(s.started_at));
+    return { s, start: Math.max(0, end - s.minutes / 60), end };
+  });
+  const from = Math.min(6, Math.floor(Math.min(...blocks.map((b) => b.start))));
+  const to = Math.max(22, Math.ceil(Math.max(...blocks.map((b) => b.end), hourOf(new Date()))));
+  const pct = (h) => `${((h - from) / (to - from)) * 100}%`;
+
+  const track = $("tl-track");
+  track.innerHTML = "";
+  track.setAttribute("role", "img");
+  track.setAttribute("aria-label", `Today's sessions: ${blocks.map((b) => `${b.s.minutes} minutes ${CATEGORY_NAMES[b.s.category]}`).join(", ")}`);
+  for (const b of blocks) {
+    const el = document.createElement("i");
+    el.className = `tl-block seg-${b.s.category}`;
+    el.style.left = pct(b.start);
+    el.style.width = `max(3px, calc(${pct(b.end)} - ${pct(b.start)}))`;
+    el.title = `${b.s.label} · ${b.s.minutes}m · ${CATEGORY_NAMES[b.s.category]}`;
+    track.append(el);
+  }
+  const now = document.createElement("span");
+  now.className = "tl-now";
+  now.style.left = pct(Math.min(to, hourOf(new Date())));
+  track.append(now);
+
+  const hours = $("tl-hours");
+  hours.innerHTML = "";
+  for (let h = Math.ceil(from / 3) * 3; h <= to; h += 3) {
+    const t = document.createElement("span");
+    t.style.left = pct(h);
+    t.textContent = `${h % 12 || 12}${h < 12 || h === 24 ? "am" : "pm"}`;
+    hours.append(t);
   }
 }
 
@@ -973,133 +1021,120 @@ function renderStreak(stats) {
   $("streak-note").textContent = note;
 }
 
-// ---------- Background sound ----------
-// Rain, ocean and soft noise are made from filtered noise with the Web Audio API, so there are
-// no audio files to download or license. Sound plays only while a focus session is running,
-// and fades out on pause, reset and breaks.
-const ambient = (() => {
-  let ctx = null;
-  let master = null;
-  let source = null;
-  let playing = null; // which sound is running now, or null
-  let previewTimer = null;
+// ---------- Lofi music ----------
+// CC0 (public domain) tracks in public/audio, listed in tracks.json. Music plays only while a
+// focus session runs; it pauses (and keeps its place) on pause, reset and breaks.
+const lofi = (() => {
+  const audio = new Audio();
+  audio.preload = "none";
+  let tracks = [];
+  let index = 0;
+  let loaded = false;
+  let wantPlaying = false;
+  let fade = null;
 
-  function noiseBuffer(kind) {
-    const length = ctx.sampleRate * 4;
-    const buf = ctx.createBuffer(1, length, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    let last = 0;
-    const b = [0, 0, 0, 0, 0, 0, 0];
-    for (let i = 0; i < length; i++) {
-      const white = Math.random() * 2 - 1;
-      if (kind === "brown") {
-        last = (last + 0.02 * white) / 1.02;
-        data[i] = last * 3.5;
-      } else {
-        // Pink noise (Paul Kellet's filter): softer than white noise, closer to rain
-        b[0] = 0.99886 * b[0] + white * 0.0555179; b[1] = 0.99332 * b[1] + white * 0.0750759;
-        b[2] = 0.969 * b[2] + white * 0.153852; b[3] = 0.8665 * b[3] + white * 0.3104856;
-        b[4] = 0.55 * b[4] + white * 0.5329522; b[5] = -0.7616 * b[5] - white * 0.016898;
-        data[i] = (b[0] + b[1] + b[2] + b[3] + b[4] + b[5] + b[6] + white * 0.5362) * 0.11;
-        b[6] = white * 0.115926;
+  const els = { toggle: $("lofi-toggle"), track: $("lofi-track"), next: $("lofi-next"), volume: $("lofi-volume") };
+
+  async function load() {
+    if (loaded) return tracks.length > 0;
+    loaded = true;
+    try {
+      const res = await fetch("/audio/tracks.json");
+      tracks = res.ok ? await res.json() : [];
+    } catch {
+      tracks = [];
+    }
+    // Start somewhere different each visit, so it isn't always the same first song
+    index = tracks.length ? Math.floor(Math.random() * tracks.length) : 0;
+    return tracks.length > 0;
+  }
+
+  function setTrack(i) {
+    index = (i + tracks.length) % tracks.length;
+    const t = tracks[index];
+    audio.src = `/audio/${t.file}`;
+    els.track.textContent = `${t.title} · ${t.artist}`;
+  }
+
+  // Gentle volume changes instead of starting or stopping abruptly
+  function fadeTo(target, ms, then) {
+    clearInterval(fade);
+    const start = audio.volume;
+    const steps = Math.max(1, Math.round(ms / 50));
+    let n = 0;
+    fade = setInterval(() => {
+      n += 1;
+      audio.volume = Math.min(1, Math.max(0, start + ((target - start) * n) / steps));
+      if (n >= steps) {
+        clearInterval(fade);
+        if (then) then();
       }
-    }
-    return buf;
+    }, 50);
   }
 
-  function build(kind) {
-    const src = ctx.createBufferSource();
-    src.buffer = noiseBuffer(kind === "rain" ? "pink" : "brown");
-    src.loop = true;
-    const filter = ctx.createBiquadFilter();
-    const level = ctx.createGain();
-    if (kind === "rain") {
-      filter.type = "bandpass"; filter.frequency.value = 1800; filter.Q.value = 0.4;
-      level.gain.value = 0.9;
-    } else if (kind === "ocean") {
-      // Waves: the volume rises and falls about every 9 seconds
-      filter.type = "lowpass"; filter.frequency.value = 700;
-      level.gain.value = 0.55;
-      const lfo = ctx.createOscillator();
-      const depth = ctx.createGain();
-      lfo.frequency.value = 0.11; depth.gain.value = 0.45;
-      lfo.connect(depth).connect(level.gain);
-      lfo.start();
-      src.addEventListener("ended", () => lfo.stop());
-    } else {
-      filter.type = "lowpass"; filter.frequency.value = 500;
-      level.gain.value = 0.8;
-    }
-    src.connect(filter).connect(level).connect(master);
-    src.start();
-    return src;
+  function play() {
+    if (!audio.src) setTrack(index);
+    audio.volume = 0;
+    audio.play().then(() => fadeTo(settings.lofiVolume, 800)).catch(() => {
+      els.track.textContent = "Press Start again to play music";
+    });
   }
 
-  function ensureContext() {
-    if (!ctx) {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return false;
-      ctx = new AC();
-      master = ctx.createGain();
-      master.gain.value = 0;
-      master.connect(ctx.destination);
-    }
-    if (ctx.state === "suspended") ctx.resume();
-    return true;
+  function pause() {
+    fadeTo(0, 500, () => audio.pause());
   }
 
-  function play(kind) {
-    if (!ensureContext()) return;
-    if (playing !== kind) {
-      if (source) source.stop(ctx.currentTime + 0.6);
-      source = build(kind);
-      playing = kind;
-    }
-    master.gain.setTargetAtTime(settings.ambientVolume * 0.35, ctx.currentTime, 0.4);
+  audio.addEventListener("ended", () => {
+    setTrack(index + 1);
+    if (wantPlaying) play();
+  });
+  audio.addEventListener("error", () => {
+    if (!audio.src) return;
+    els.track.textContent = "This track didn't load. Trying the next one.";
+    setTimeout(() => { setTrack(index + 1); if (wantPlaying) play(); }, 1500);
+  });
+
+  function renderControls() {
+    els.toggle.setAttribute("aria-pressed", String(settings.lofi));
+    els.next.hidden = !settings.lofi;
+    els.volume.hidden = !settings.lofi;
+    if (!settings.lofi) els.track.textContent = "";
+    else if (!audio.src && tracks.length) els.track.textContent = "Plays while you focus";
   }
 
-  function silence() {
-    if (!ctx || !playing) return;
-    master.gain.setTargetAtTime(0, ctx.currentTime, 0.25);
-    const old = source;
-    setTimeout(() => { if (source === old && master.gain.value < 0.01) { old.stop(); source = null; playing = null; } }, 1500);
-  }
+  els.volume.value = settings.lofiVolume;
+  els.toggle.addEventListener("click", async () => {
+    settings.lofi = !settings.lofi;
+    saveSettings();
+    if (settings.lofi && !(await load())) {
+      settings.lofi = false;
+      els.track.textContent = "No music found.";
+    }
+    renderControls();
+    lofi.sync(Boolean(tick) && mode === "focus");
+  });
+  els.next.addEventListener("click", () => {
+    if (!tracks.length) return;
+    setTrack(index + 1);
+    if (wantPlaying) play();
+  });
+  els.volume.addEventListener("input", () => {
+    settings.lofiVolume = Number(els.volume.value);
+    saveSettings();
+    if (wantPlaying) { clearInterval(fade); audio.volume = settings.lofiVolume; }
+  });
+  if (settings.lofi) load().then(renderControls);
+  renderControls();
 
   return {
-    // Called from render(): sound on while focusing, off otherwise. Cheap when nothing changes.
+    // Called from render() on every tick; only acts when focusing starts or stops
     sync(focusing) {
-      if (previewTimer) return;
-      const want = focusing && settings.ambient !== "off" ? settings.ambient : null;
-      if (want && (want !== playing || master.gain.value === 0)) play(want);
-      else if (!want && playing) silence();
-    },
-    // A short sample when you pick a sound, so you know what it is
-    preview() {
-      clearTimeout(previewTimer);
-      if (settings.ambient === "off") { previewTimer = null; silence(); return; }
-      play(settings.ambient);
-      previewTimer = setTimeout(() => { previewTimer = null; ambient.sync(Boolean(tick) && mode === "focus"); }, 2500);
-    },
-    volume() {
-      if (ctx && playing) master.gain.setTargetAtTime(settings.ambientVolume * 0.35, ctx.currentTime, 0.1);
+      const want = settings.lofi && focusing && tracks.length > 0;
+      if (want === wantPlaying) return;
+      wantPlaying = want;
+      if (want) play(); else if (!audio.paused) pause();
     },
   };
 })();
 
-const ambientSelect = $("ambient-select");
-const ambientVolume = $("ambient-volume");
-ambientSelect.value = settings.ambient;
-ambientVolume.value = settings.ambientVolume;
-ambientVolume.disabled = settings.ambient === "off";
-ambientSelect.addEventListener("change", () => {
-  settings.ambient = ambientSelect.value;
-  ambientVolume.disabled = settings.ambient === "off";
-  saveSettings();
-  ambient.preview();
-});
-ambientVolume.addEventListener("input", () => {
-  settings.ambientVolume = Number(ambientVolume.value);
-  saveSettings();
-  ambient.volume();
-});
-syncSound = () => ambient.sync(Boolean(tick) && mode === "focus");
+syncSound = () => lofi.sync(Boolean(tick) && mode === "focus");

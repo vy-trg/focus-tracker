@@ -669,9 +669,24 @@ button:active, .btn:active, .preset:active, .round-btn:active, .icon-btn:active 
   font: 600 0.65rem var(--mono); color: var(--muted); background: var(--bg); }
 .week-dots li.on { background: var(--focus); color: #fff; }
 .streak-note { margin: 0; font-size: 0.85rem; color: var(--muted); }
-.ambient { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; max-width: 360px; margin: 12px auto 0; width: 100%; }
-.ambient label { grid-column: 1 / -1; font-size: 0.8rem; color: var(--muted); text-align: center; }
-.ambient select { font: inherit; font-size: 0.9rem; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: inherit; }
-.ambient input[type="range"] { accent-color: var(--focus); width: 100%; }
-.ambient input:disabled { opacity: 0.4; }
-body.focus-mode .ambient { display: none; }
+.lofi { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 12px auto 0; max-width: 420px; }
+.lofi-toggle { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 0.9rem; font-weight: 600;
+  padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: inherit; cursor: pointer; }
+.lofi-toggle svg { width: 16px; height: 16px; fill: currentColor; }
+.lofi-toggle[aria-pressed="true"] { background: var(--focus); border-color: var(--focus); color: #fff; }
+.lofi-track { margin: 0; font-size: 0.82rem; color: var(--muted); flex: 1 1 140px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lofi-next { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--bg); color: inherit; cursor: pointer; display: grid; place-items: center; }
+.lofi-next svg { width: 14px; height: 14px; fill: currentColor; }
+#lofi-volume { accent-color: var(--focus); width: 110px; }
+/* Focus mode keeps the music playing; only the controls hide */
+body.focus-mode .lofi { display: none; }
+
+/* ---------- Today's timeline ---------- */
+.day-timeline { margin: 4px 0 10px; }
+.tl-track { position: relative; height: 18px; border-radius: 6px; background: var(--bg); overflow: hidden; }
+.tl-block { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+.tl-now { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: 0.35; }
+.tl-hours { position: relative; height: 16px; margin-top: 3px; font: 0.68rem var(--mono); color: var(--muted); }
+.tl-hours span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.tl-hours span:first-child { transform: none; }
+.tl-hours span:last-child { transform: translateX(-100%); }
