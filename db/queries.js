@@ -195,7 +195,49 @@ async function getReport(userId, days) {
   return { days: [...byDay.values()], totals };
 }
 
+// ---------- Habits ----------
+// Every query filters by user_id, so one person can never read or change another's habits.
+
+async function getHabits(userId) {
+  const { rows } = await pool.query(
+    `SELECT id, name, category, target_sessions, created_at
+     FROM habits WHERE user_id = $1 ORDER BY created_at, id`,
+    [userId]
+  );
+  return rows;
+}
+
+async function insertHabit(userId, { name, category, target_sessions }) {
+  const { rows } = await pool.query(
+    `INSERT INTO habits (user_id, name, category, target_sessions) VALUES ($1, $2, $3, $4)
+     RETURNING id, name, category, target_sessions, created_at`,
+    [userId, name, category, target_sessions]
+  );
+  return rows[0];
+}
+
+// Only the fields sent change (COALESCE keeps the old value for the others). null = not found or not yours.
+async function updateHabit(id, userId, { name, category, target_sessions }) {
+  const { rows } = await pool.query(
+    `UPDATE habits SET name = COALESCE($3, name), category = COALESCE($4, category),
+            target_sessions = COALESCE($5, target_sessions)
+     WHERE id = $1 AND user_id = $2
+     RETURNING id, name, category, target_sessions, created_at`,
+    [id, userId, name ?? null, category ?? null, target_sessions ?? null]
+  );
+  return rows[0] ?? null;
+}
+
+async function deleteHabit(id, userId) {
+  const result = await pool.query("DELETE FROM habits WHERE id = $1 AND user_id = $2", [id, userId]);
+  return result.rowCount;
+}
+
 module.exports = {
+  getHabits,
+  insertHabit,
+  updateHabit,
+  deleteHabit,
   getReport,
   getSessionsPage,
   insertSession,
