@@ -321,11 +321,11 @@ app.delete("/api/tasks/:id", async (req, res) => {
 });
 
 // ---------- Habits ----------
-// "2 study sessions a day". Tomorrow: done-today and streak worked out from sessions.
+// "2 study sessions a day". Done-today and streak are worked out from sessions (see habits.js).
 
 app.get("/api/habits", async (req, res) => {
   try {
-    res.json(await db.getHabits(req.user.id));
+    res.json(await db.getHabitsWithProgress(req.user.id));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server Error" });
