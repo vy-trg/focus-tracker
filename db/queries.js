@@ -1,6 +1,7 @@
 const pool = require("./pool");
 const { CATEGORIES } = require("../validation");
 const { countStreak, longestStreak } = require("../streak");
+const { habitProgress, groupCounts } = require("../habits");
 
 // Every query filters on user_id, so a user can only ever see or change their own rows.
 
@@ -207,6 +208,25 @@ async function getHabits(userId) {
   return rows;
 }
 
+// Each habit with today's progress, the last 7 days and its streak.
+// One query counts this user's sessions per category per Brisbane day since their oldest habit;
+// the rules (target hit, streak, days before the habit existed) live in habits.js and are tested there.
+async function getHabitsWithProgress(userId) {
+  const habits = await getHabits(userId);
+  if (habits.length === 0) return [];
+  const { rows } = await pool.query(
+    `SELECT category, to_char(${LOCAL_DAY}, 'YYYY-MM-DD') AS day, COUNT(*)::int AS count
+     FROM sessions
+     WHERE user_id = $1
+       AND ${LOCAL_DAY} >= (SELECT MIN((created_at AT TIME ZONE 'Australia/Brisbane')::date) FROM habits WHERE user_id = $1)
+     GROUP BY category, day`,
+    [userId]
+  );
+  const counts = groupCounts(rows);
+  const today = todayInBrisbane();
+  return habits.map((h) => habitProgress(h, counts, today));
+}
+
 async function insertHabit(userId, { name, category, target_sessions }) {
   const { rows } = await pool.query(
     `INSERT INTO habits (user_id, name, category, target_sessions) VALUES ($1, $2, $3, $4)
@@ -235,6 +255,7 @@ async function deleteHabit(id, userId) {
 
 module.exports = {
   getHabits,
+  getHabitsWithProgress,
   insertHabit,
   updateHabit,
   deleteHabit,
