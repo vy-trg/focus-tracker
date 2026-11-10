@@ -899,11 +899,145 @@ function renderTimeline(sessions) {
 
 function refreshAll() {
   loadToday();
+  loadHabits();
   loadSessions();
   loadStats();
   loadReport();
   loadTasks();
 }
+
+// ---------- Habits: daily goals that tick themselves from finished sessions ----------
+// The server works out today's progress, the last 7 days and the streak (habits.js, tested).
+let habits = [];
+let habitsDoneBefore = null; // ids done today at the last load, to say "Habit done" once when one completes
+
+const CATEGORY_NAME = { study: "Study", reading: "Reading", work: "Work", journal: "Journal" };
+
+async function loadHabits() {
+  try {
+    habits = await api("/api/habits");
+  } catch (err) {
+    $("habit-list").removeAttribute("aria-busy");
+    $("habit-list").innerHTML = '<li class="empty">Habits aren\'t loading right now. They\'ll be back after the next session.</li>';
+    return;
+  }
+  // A session just finished a habit for today: say so once
+  const doneNow = new Set(habits.filter((h) => h.today.done).map((h) => h.id));
+  if (habitsDoneBefore) {
+    const finished = habits.filter((h) => doneNow.has(h.id) && !habitsDoneBefore.has(h.id));
+    if (finished.length) showMessage(`Habit done for today: ${finished.map((h) => h.name).join(", ")}`);
+  }
+  habitsDoneBefore = doneNow;
+  renderHabits();
+}
+
+function renderHabits() {
+  const list = $("habit-list");
+  list.removeAttribute("aria-busy");
+  list.innerHTML = "";
+  if (habits.length === 0) {
+    list.innerHTML = '<li class="empty">No habits yet. Try "2 study sessions a day": it ticks itself when you finish sessions.</li>';
+    return;
+  }
+  for (const h of habits) {
+    const li = document.createElement("li");
+    li.className = "habit" + (h.today.done ? " done" : "");
+    li.innerHTML = `
+      <div><div class="habit-name"></div><div class="habit-meta"></div></div>
+      <div class="habit-streak"></div>
+      <div class="habit-progress">
+        <div class="habit-bar" role="progressbar" aria-valuemin="0"><i></i></div>
+        <span class="habit-count"></span>
+      </div>
+      <div class="habit-foot">
+        <ol class="week-dots"></ol>
+        <button class="icon-btn" type="button">×</button>
+      </div>`;
+    li.querySelector(".habit-name").textContent = h.name;
+    li.querySelector(".habit-meta").textContent =
+      `${h.target_sessions} ${CATEGORY_NAME[h.category] ?? h.category} session${h.target_sessions === 1 ? "" : "s"} a day`;
+
+    const streak = li.querySelector(".habit-streak");
+    streak.textContent = `${h.streak} day${h.streak === 1 ? "" : "s"}`;
+    const small = document.createElement("small");
+    small.textContent = h.streak === 0 ? "start today" : "streak";
+    streak.append(small);
+
+    // Today: a bar that fills up, and "1 of 2" (it can go past the goal: 3 of 2 is fine)
+    const bar = li.querySelector(".habit-bar");
+    bar.setAttribute("aria-valuemax", String(h.today.target));
+    bar.setAttribute("aria-valuenow", String(Math.min(h.today.sessions, h.today.target)));
+    bar.setAttribute("aria-label", `${h.name} today`);
+    bar.querySelector("i").style.width = `${Math.min(100, (h.today.sessions / h.today.target) * 100)}%`;
+    const left = h.today.target - h.today.sessions;
+    li.querySelector(".habit-count").textContent = h.today.done
+      ? `Done today (${h.today.sessions}/${h.today.target})`
+      : `${h.today.sessions}/${h.today.target} · ${left} more`;
+
+    // Last 7 days: full dot = goal reached, light dot = some sessions, faded = before the habit existed
+    const dots = li.querySelector(".week-dots");
+    dots.setAttribute("aria-label", `${h.name}, last 7 days`);
+    h.last7.forEach((d, i) => {
+      const dot = document.createElement("li");
+      const name = new Date(`${d.day}T00:00:00Z`).toLocaleDateString("en-AU", { weekday: "long", timeZone: "UTC" });
+      dot.textContent = name[0];
+      dot.className = [d.done ? "on" : d.sessions > 0 ? "part" : "", d.before ? "before" : "", i === 6 ? "today" : ""].join(" ").trim();
+      const state = d.before ? "before this habit started" : d.done ? "goal reached" : d.sessions > 0 ? `${d.sessions} of ${h.target_sessions}` : "missed";
+      dot.title = `${name}: ${state}`;
+      dot.setAttribute("aria-label", `${i === 6 ? "Today" : name}: ${state}`);
+      dots.append(dot);
+    });
+
+    const del = li.querySelector(".icon-btn");
+    del.setAttribute("aria-label", `Delete habit ${h.name}`);
+    del.addEventListener("click", () =>
+      deleteWithUndo(li, "Habit deleted", async () => {
+        await api(`/api/habits/${h.id}`, { method: "DELETE", keepalive: true });
+        await loadHabits();
+      }),
+    );
+    list.append(li);
+  }
+  staggerOnce(list);
+}
+
+function showHabitForm(open) {
+  $("habit-form").hidden = !open;
+  $("habit-new").setAttribute("aria-expanded", String(open));
+  $("habit-error").hidden = true;
+  if (open) $("habit-name").focus();
+  else $("habit-new").focus();
+}
+$("habit-new").addEventListener("click", () => showHabitForm($("habit-form").hidden));
+$("habit-cancel").addEventListener("click", () => showHabitForm(false));
+$("habit-form").addEventListener("keydown", (e) => { if (e.key === "Escape") showHabitForm(false); });
+$("habit-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("habit-name").value.trim();
+  if (!name) {
+    $("habit-error").textContent = "Give the habit a name.";
+    $("habit-error").hidden = false;
+    $("habit-name").focus();
+    return;
+  }
+  const submit = e.submitter ?? $("habit-form").querySelector('[type="submit"]');
+  submit.disabled = true;
+  try {
+    await api("/api/habits", {
+      method: "POST",
+      body: JSON.stringify({ name, category: $("habit-category").value, target_sessions: Number($("habit-target").value) }),
+    });
+    $("habit-name").value = "";
+    showHabitForm(false);
+    habitsDoneBefore = null; // a new habit already met today shouldn't announce itself
+    await loadHabits();
+  } catch (err) {
+    $("habit-error").textContent = err.message;
+    $("habit-error").hidden = false;
+  } finally {
+    submit.disabled = false;
+  }
+});
 
 // ---------- Wire up ----------
 els.rangeTabs.forEach((tab) =>

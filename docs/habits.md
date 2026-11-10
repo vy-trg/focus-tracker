@@ -73,3 +73,13 @@ So there is nothing to forget, and deleting a session updates the habit too.
 | `before: true` in `last7` | The page can grey out days before the habit existed |
 
 One SQL query counts sessions per category per day; the rules are plain JavaScript with 12 tests in `test/habits.test.js`.
+
+## On the page (Wed 11 Nov)
+
+A **Habits** card on the Focus page, under Today:
+
+- **New habit**: name, which sessions count (Study, Reading, Work, Journal) and how many a day. No checkbox to tick: it fills itself as you finish sessions.
+- Each habit shows today's progress bar (`1/2 · 1 more`, then `Done today`), the streak, and 7 dots for the last 7 days: full = goal reached, light = some sessions, faded = before the habit existed, ringed = today.
+- When a session finishes a habit for the day, the page says so once ("Habit done for today: …").
+- Delete has the same 5-second undo as tasks and sessions.
+- Everything updates after each session without reloading the page. Screen readers get a progress bar with its value and a label for every dot.

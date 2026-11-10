@@ -690,3 +690,32 @@ body.focus-mode .lofi { display: none; }
 .tl-hours span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
 .tl-hours span:first-child { transform: none; }
 .tl-hours span:last-child { transform: translateX(-100%); }
+
+/* ---------- Habits ---------- */
+.habit-form { display: grid; gap: 6px; margin-bottom: 14px; padding: 12px; border-radius: 14px; background: var(--bg); }
+.habit-form input, .habit-form select { background: var(--screen); border: 0; min-height: 40px; }
+.habit-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.habit-form-row > div { display: grid; gap: 6px; }
+.field-label { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+.habit-hint { margin: 2px 0 0; font-size: 0.8rem; color: var(--muted); }
+.habit-error { margin: 0; font-size: 0.85rem; color: var(--danger, #b4322a); }
+.habit-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.habit-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.habit { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center; padding: 12px; border-radius: 14px; background: var(--bg); }
+.habit-name { font-weight: 700; }
+.habit-meta { font-size: 0.8rem; color: var(--muted); }
+.habit-streak { text-align: right; font: 600 0.85rem var(--mono); white-space: nowrap; }
+.habit-streak small { display: block; font-family: inherit; font-weight: 600; font-size: 0.7rem; color: var(--muted); }
+.habit-progress { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; }
+.habit-bar { flex: 1; height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.habit-bar i { display: block; height: 100%; border-radius: 999px; background: var(--focus); transition: width 300ms var(--ease-out, ease-out); }
+.habit-count { font: 600 0.8rem var(--mono); white-space: nowrap; }
+.habit.done .habit-count { color: var(--focus); }
+.habit-foot { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.habit .week-dots li { width: 20px; height: 20px; font-size: 0.6rem; background: var(--screen); }
+.habit .week-dots li.on { background: var(--focus); color: #fff; }
+.habit .week-dots li.part { background: color-mix(in srgb, var(--focus) 30%, var(--screen)); color: var(--ink); }
+.habit .week-dots li.before { opacity: 0.35; }
+.habit .week-dots li.today { outline: 2px solid var(--focus); outline-offset: 1px; }
+.habit .icon-btn { width: 32px; height: 32px; }
+body[data-view="reports"] #habits { display: none; }

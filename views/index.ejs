@@ -191,6 +191,43 @@
           <ul class="today-list" id="today-list" aria-busy="true"><li class="skeleton skeleton-row"></li></ul>
         </section>
 
+        <!-- ===== Habits: daily goals that tick themselves from your sessions ===== -->
+        <section class="card" id="habits" aria-labelledby="habits-heading">
+          <div class="card-head">
+            <h2 id="habits-heading">Habits</h2>
+            <button class="btn btn-ghost btn-small" id="habit-new" type="button" aria-expanded="false" aria-controls="habit-form">New habit</button>
+          </div>
+          <form class="habit-form" id="habit-form" hidden>
+            <label class="field-label" for="habit-name">Name</label>
+            <input id="habit-name" type="text" maxlength="60" placeholder="e.g. Study every day" autocomplete="off" required>
+            <div class="habit-form-row">
+              <div>
+                <label class="field-label" for="habit-category">Counts</label>
+                <select id="habit-category">
+                  <option value="study">Study sessions</option>
+                  <option value="reading">Reading sessions</option>
+                  <option value="work">Work sessions</option>
+                  <option value="journal">Journal sessions</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label" for="habit-target">Each day</label>
+                <select id="habit-target">
+                  <option value="1">1 session</option><option value="2" selected>2 sessions</option><option value="3">3 sessions</option>
+                  <option value="4">4 sessions</option><option value="6">6 sessions</option><option value="8">8 sessions</option>
+                </select>
+              </div>
+            </div>
+            <p class="habit-hint">It ticks itself: every session you finish in that category counts. No checkbox to remember.</p>
+            <p class="habit-error" id="habit-error" role="alert" hidden></p>
+            <div class="habit-actions">
+              <button class="btn btn-ghost btn-small" id="habit-cancel" type="button">Cancel</button>
+              <button class="btn btn-dark btn-small" type="submit">Add habit</button>
+            </div>
+          </form>
+          <ul class="habit-list" id="habit-list" aria-busy="true"><li class="skeleton skeleton-row"></li></ul>
+        </section>
+
         <!-- ===== Insights ===== -->
         <section class="card" id="insights" aria-labelledby="insights-heading">
           <div class="card-head">
