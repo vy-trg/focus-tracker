@@ -40,7 +40,7 @@ test("create a room, a friend joins with the code, both see both names", async (
   const seen = once(vy, "room:state");
   const joined = await ask(amber, "room:join", code.toLowerCase());
   assert.equal(joined.ok, true);
-  assert.deepEqual((await seen).members, ["vy", "amber"]);
+  assert.deepEqual((await seen).members.map((m) => m.name), ["vy", "amber"]);
   close();
 });
 
@@ -67,4 +67,23 @@ test("a wrong code gets a clear answer and no room", async () => {
   assert.equal(r.ok, false);
   assert.match(r.error, /No room/);
   close();
+});
+
+test("a break starts by itself on the server when focus ends, and everyone hears about it", async () => {
+  const { as, close } = await startServer();
+  try {
+    const vy = as("vy");
+    await once(vy, "connect");
+    await ask(vy, "room:create");
+    const states = [];
+    vy.on("room:state", (st) => states.push(st));
+    // 1-second "minutes": a 1-minute focus ends after 1 s
+    vy.emit("room:start", { preset: { focus: 1, short: 1, long: 1, every: 4 }, fast: true });
+    await new Promise((r) => setTimeout(r, 1500));
+    assert.equal(states[0].phase, "focus");
+    assert.equal(states.at(-1).phase, "short");
+    assert.equal(states.at(-1).seq, 2);
+  } finally {
+    close();
+  }
 });

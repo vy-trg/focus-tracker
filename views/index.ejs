@@ -213,6 +213,24 @@
             <p class="room-note" id="room-note" role="status" hidden></p>
             <p class="room-lead" id="room-people" aria-live="polite"></p>
             <ul class="room-members" id="room-members"></ul>
+            <!-- The room's timer while it runs, and whether you're on it -->
+            <div class="room-timer" id="room-timer" hidden>
+              <p class="room-timer-line"><span id="room-phase"></span> <b id="room-left"></b></p>
+              <label class="room-switch">
+                <input id="room-follow" type="checkbox">
+                <span class="room-switch-track" aria-hidden="true"></span>
+                <span>Follow the room timer <small>Off: stay in the room on your own timer.</small></span>
+              </label>
+            </div>
+            <!-- "Amber started a 25-minute focus. Join?" Goes away by itself after 30 seconds. -->
+            <div class="room-ask" id="room-ask" role="alertdialog" aria-labelledby="room-ask-text" hidden>
+              <p id="room-ask-text"></p>
+              <div class="room-ask-actions">
+                <button class="btn btn-ghost btn-small" id="room-ask-no" type="button"></button>
+                <button class="btn btn-dark btn-small" id="room-ask-yes" type="button"></button>
+              </div>
+              <div class="room-ask-bar" aria-hidden="true"><i id="room-ask-bar"></i></div>
+            </div>
             <button class="btn btn-ghost btn-small" id="room-leave" type="button">Leave room</button>
           </div>
           <p class="habit-error" id="room-error" role="alert" hidden></p>

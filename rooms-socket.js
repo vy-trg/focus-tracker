@@ -24,9 +24,27 @@ function attachRooms(server, { middlewares = [], getUser = (socket) => socket.re
     next();
   });
 
+  // When a room's focus or break is due to end, the server moves it on (to a break, or to idle)
+  // and tells everyone. One timer per room, replaced on every change.
+  const timers = new Map();
+  const schedule = (code) => {
+    clearTimeout(timers.get(code));
+    timers.delete(code);
+    const room = rooms.rooms.get(code);
+    if (!room || room.endAt === null) return;
+    const t = setTimeout(() => {
+      timers.delete(code);
+      if (rooms.advance(code, now())) broadcast(code);
+    }, Math.max(0, room.endAt - now()) + 50);
+    t.unref?.();
+    timers.set(code, t);
+  };
+
   // Everyone in the room gets the same state; the timer is worked out from endAt on each screen
   const broadcast = (code) => {
-    if (code) io.to(code).emit("room:state", rooms.state(code, now()));
+    if (!code) return;
+    io.to(code).emit("room:state", rooms.state(code, now()));
+    schedule(code);
   };
 
   // A few messages a second at most per person, so one tab can't flood the room
@@ -39,6 +57,8 @@ function attachRooms(server, { middlewares = [], getUser = (socket) => socket.re
 
   io.on("connection", (socket) => {
     const user = socket.data.user;
+    // The server's time, so every screen's countdown matches even if a computer's clock is off
+    socket.emit("room:clock", now());
     // Back after a dropped connection (or a second tab): rejoin the room you were in
     const current = rooms.roomOf(user.id);
     if (current) {
@@ -81,20 +101,27 @@ function attachRooms(server, { middlewares = [], getUser = (socket) => socket.re
       if (typeof reply === "function") reply({ ok: true });
     });
 
-    // Timer controls: anyone in the room can use them
+    // Timer controls: anyone in the room can use them.
+    // room:start carries the lengths ({ focus, short, long, every, autoBreaks }) when it starts a new focus.
+    socket.on("room:start", (options) => {
+      if (limited(socket)) return;
+      const o = options && typeof options === "object" ? options : {};
+      broadcast(rooms.start(user, now(), { preset: o.preset, fast: Boolean(o.fast) && process.env.NODE_ENV !== "production" })?.code);
+    });
     for (const [event, act] of [
-      ["room:start", () => rooms.start(user.id, now())],
-      ["room:pause", () => rooms.pause(user.id, now())],
-      ["room:reset", () => rooms.reset(user.id)],
+      ["room:pause", () => rooms.pause(user, now())],
+      ["room:reset", () => rooms.reset(user)],
+      ["room:skipBreak", () => rooms.skipBreak(user)],
     ]) {
       socket.on(event, () => {
         if (limited(socket)) return;
         broadcast(act()?.code);
       });
     }
-    socket.on("room:minutes", (minutes) => {
+    // Yes / no to the room's timer
+    socket.on("room:follow", (on) => {
       if (limited(socket)) return;
-      broadcast(rooms.setMinutes(user.id, minutes)?.code);
+      broadcast(rooms.follow(user.id, Boolean(on))?.code);
     });
 
     // Closing the tab doesn't leave the room straight away: a dropped connection often comes back.
