@@ -1039,6 +1039,93 @@ $("habit-form").addEventListener("submit", async (e) => {
   }
 });
 
+// ---------- Study room (body doubling) ----------
+// Socket.IO connects only once you make or join a room (or were in one before a reload),
+// so the page costs nothing extra for people who never use rooms.
+let roomSocket = null;
+const ME = document.body.dataset.username || "";
+
+// A short note inside the Study room card itself (not under the timer), gone after 3 seconds
+let roomNoteTimer = null;
+function roomNote(text) {
+  const el = $("room-note");
+  el.textContent = text;
+  el.hidden = false;
+  clearTimeout(roomNoteTimer);
+  roomNoteTimer = setTimeout(() => { el.hidden = true; }, 3000);
+}
+
+function roomError(text) {
+  $("room-error").textContent = text;
+  $("room-error").hidden = !text;
+}
+
+function connectRoom() {
+  if (roomSocket) return roomSocket;
+  if (typeof io !== "function") {
+    roomError("Study rooms aren't available right now. Try reloading the page.");
+    return null;
+  }
+  roomSocket = io({ transports: ["websocket", "polling"] });
+  roomSocket.on("room:state", renderRoom);
+  roomSocket.on("connect_error", (err) => roomError(err.message === "Log in to use study rooms" ? "Log in again to use study rooms." : "Can't reach the study room. Trying again…"));
+  roomSocket.on("connect", () => roomError(""));
+  return roomSocket;
+}
+
+function renderRoom(state) {
+  const inRoom = Boolean(state);
+  $("room-out").hidden = inRoom;
+  $("room-in").hidden = !inRoom;
+  try { inRoom ? localStorage.setItem("inRoom", "1") : localStorage.removeItem("inRoom"); } catch { /* fine without */ }
+  if (!inRoom) return;
+  $("room-code").textContent = state.code;
+  const others = state.members.length - 1;
+  $("room-people").textContent = others === 0
+    ? "Just you so far. Send the code to a friend."
+    : `You and ${others === 1 ? "1 other person are" : `${others} others are`} in this room.`;
+  const list = $("room-members");
+  list.innerHTML = "";
+  for (const name of state.members) {
+    const li = document.createElement("li");
+    li.textContent = name === state.host ? `${name} (host)` : name;
+    if (name === ME) li.className = "me";
+    list.append(li);
+  }
+}
+
+$("room-create").addEventListener("click", () => {
+  const s = connectRoom();
+  if (!s) return;
+  s.emit("room:create", null, (r) => {
+    if (!r?.ok) roomError("Couldn't make a room. Try again.");
+  });
+});
+$("room-join-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const typed = $("room-code-input").value;
+  if (!typed.trim()) return roomError("Type the code your friend sent you.");
+  const s = connectRoom();
+  if (!s) return;
+  s.emit("room:join", typed, (r) => {
+    if (r?.ok) { $("room-code-input").value = ""; roomError(""); }
+    else roomError(r?.error ?? "Couldn't join. Try again.");
+  });
+});
+$("room-leave").addEventListener("click", () => {
+  roomSocket?.emit("room:leave", null, () => renderRoom(null));
+});
+$("room-copy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText($("room-code").textContent);
+    roomNote("Code copied. Send it to a friend.");
+  } catch {
+    roomNote(`Copy didn't work here. The code is ${$("room-code").textContent}.`);
+  }
+});
+// Were you in a room before reloading? Reconnect: the server puts you back in it
+try { if (localStorage.getItem("inRoom")) connectRoom(); } catch { /* fine without */ }
+
 // ---------- Wire up ----------
 els.rangeTabs.forEach((tab) =>
   tab.addEventListener("click", () => {

@@ -6,7 +6,7 @@
   <title>Focus Tracker</title>
   <link rel="stylesheet" href="/style.css">
 </head>
-<body class="app" data-mode="focus">
+<body class="app" data-mode="focus" data-username="<%= username %>">
   <div class="shell">
     <header class="topbar">
       <span class="brand">Focus Tracker</span>
@@ -191,6 +191,33 @@
           <ul class="today-list" id="today-list" aria-busy="true"><li class="skeleton skeleton-row"></li></ul>
         </section>
 
+        <!-- ===== Study room: focus together with friends (body doubling) ===== -->
+        <section class="card" id="room" aria-labelledby="room-heading">
+          <div class="card-head">
+            <h2 id="room-heading">Study room</h2>
+          </div>
+          <div id="room-out">
+            <p class="room-lead">Focus alongside friends: one of you makes a room, the others join with its code.</p>
+            <div class="room-actions">
+              <button class="btn btn-dark btn-small" id="room-create" type="button">Make a room</button>
+              <form id="room-join-form" class="room-join" novalidate>
+                <label class="visually-hidden" for="room-code-input">Room code</label>
+                <input id="room-code-input" maxlength="9" placeholder="Code, e.g. K7M2QX" autocomplete="off" autocapitalize="characters" spellcheck="false">
+                <button class="btn btn-ghost btn-small" type="submit">Join</button>
+              </form>
+            </div>
+          </div>
+          <div id="room-in" hidden>
+            <p class="room-code-line">Room <b id="room-code" class="room-code"></b>
+              <button class="btn btn-ghost btn-small" id="room-copy" type="button">Copy code</button></p>
+            <p class="room-note" id="room-note" role="status" hidden></p>
+            <p class="room-lead" id="room-people" aria-live="polite"></p>
+            <ul class="room-members" id="room-members"></ul>
+            <button class="btn btn-ghost btn-small" id="room-leave" type="button">Leave room</button>
+          </div>
+          <p class="habit-error" id="room-error" role="alert" hidden></p>
+        </section>
+
         <!-- ===== Habits: daily goals that tick themselves from your sessions ===== -->
         <section class="card" id="habits" aria-labelledby="habits-heading">
           <div class="card-head">
@@ -277,6 +304,8 @@
     <button type="button" id="toast-undo">Undo</button>
   </div>
 
+  <!-- Served by Socket.IO itself; only used by the study room -->
+  <script src="/socket.io/socket.io.min.js"></script>
   <script src="/timer.js"></script>
 </body>
 </html>

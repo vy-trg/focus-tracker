@@ -1,6 +1,8 @@
 const path = require("node:path");
 const express = require("express");
+const http = require("http");
 const helmet = require("helmet");
+const { attachRooms } = require("./rooms-socket");
 const { rateLimit } = require("express-rate-limit");
 const session = require("express-session");
 const PgStore = require("connect-pg-simple")(session);
@@ -48,20 +50,19 @@ app.use(
 // --- LOGIN SESSIONS ---
 // The login session lives in Postgres (table user_sessions), so users stay
 // logged in when Render restarts the app.
-app.use(
-  session({
-    store: new PgStore({ pool, tableName: "user_sessions", createTableIfMissing: true }),
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-      httpOnly: true, // page JavaScript can't read the cookie
-      sameSite: "lax", // not sent on cross-site POSTs
-      secure: process.env.NODE_ENV === "production", // HTTPS only on Render
-    },
-  })
-);
+const sessionMiddleware = session({
+  store: new PgStore({ pool, tableName: "user_sessions", createTableIfMissing: true }),
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    httpOnly: true, // page JavaScript can't read the cookie
+    sameSite: "lax", // not sent on cross-site POSTs
+    secure: process.env.NODE_ENV === "production", // HTTPS only on Render
+  },
+});
+app.use(sessionMiddleware);
 app.use(passport.session());
 
 // --- RATE LIMITS ---
@@ -394,7 +395,11 @@ app.delete("/api/habits/:id", async (req, res) => {
 // Only start the server when run directly (node app.js), not when a test imports the app.
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
+  // One http server for the pages and the study rooms (Socket.IO). The rooms read the same
+  // login cookie as the pages, so only logged-in people can join.
+  const server = http.createServer(app);
+  attachRooms(server, { middlewares: [sessionMiddleware, passport.session()] });
+  server.listen(PORT, () => {
     console.log(`Focus Tracker app listening on port ${PORT}!`);
   });
 }

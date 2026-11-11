@@ -719,3 +719,15 @@ body.focus-mode .lofi { display: none; }
 .habit .week-dots li.today { outline: 2px solid var(--focus); outline-offset: 1px; }
 .habit .icon-btn { width: 32px; height: 32px; }
 body[data-view="reports"] #habits { display: none; }
+
+/* ---------- Study room ---------- */
+.room-lead { margin: 0 0 10px; font-size: 0.9rem; color: var(--muted); }
+.room-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.room-join { display: flex; gap: 8px; flex: 1; min-width: 220px; }
+.room-join input { flex: 1; min-width: 0; min-height: 40px; background: var(--bg); border: 0; text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--mono); }
+.room-code-line { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; }
+.room-code { font: 700 1.4rem var(--mono); letter-spacing: 0.12em; }
+.room-members { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.room-members li { padding: 4px 10px; border-radius: 999px; background: var(--bg); font-size: 0.85rem; font-weight: 600; }
+.room-members li.me { background: var(--focus); color: #fff; }
+.room-note { margin: -2px 0 8px; font-size: 0.85rem; font-weight: 600; color: var(--focus); }
