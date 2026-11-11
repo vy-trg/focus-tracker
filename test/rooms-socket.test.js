@@ -21,6 +21,11 @@ async function startServer() {
   return { as, close };
 }
 const once = (socket, event) => new Promise((r) => socket.once(event, r));
+// The next state that matches (earlier broadcasts, like someone joining, can still be on their way)
+const stateWhere = (socket, ok) => new Promise((r) => {
+  const on = (st) => { if (ok(st)) { socket.off("room:state", on); r(st); } };
+  socket.on("room:state", on);
+});
 const ask = (socket, event, data) => new Promise((r) => socket.emit(event, data, r));
 
 test("someone who isn't logged in can't connect", async () => {
@@ -40,23 +45,32 @@ test("create a room, a friend joins with the code, both see both names", async (
   const seen = once(vy, "room:state");
   const joined = await ask(amber, "room:join", code.toLowerCase());
   assert.equal(joined.ok, true);
-  assert.deepEqual((await seen).members, ["vy", "amber"]);
+  assert.deepEqual((await seen).members.map((m) => m.name), ["vy", "amber"]);
   close();
 });
 
-test("a start from one person reaches everyone, with the same end time", async () => {
+test("a start waits for the answer, then reaches everyone with the same end time", async () => {
   const { as, close } = await startServer();
-  const vy = as("vy");
-  const amber = as("amber");
-  await Promise.all([once(vy, "connect"), once(amber, "connect")]);
-  const { code } = await ask(vy, "room:create");
-  await ask(amber, "room:join", code);
-  const [a, b] = [once(vy, "room:state"), once(amber, "room:state")];
-  amber.emit("room:start");
-  const [sa, sb] = await Promise.all([a, b]);
-  assert.equal(sa.running, true);
-  assert.equal(sa.endAt, sb.endAt);
-  close();
+  try {
+    const vy = as("vy");
+    const amber = as("amber");
+    await Promise.all([once(vy, "connect"), once(amber, "connect")]);
+    const { code } = await ask(vy, "room:create");
+    await ask(amber, "room:join", code);
+    const asked = stateWhere(vy, (st) => st.phase !== "idle");
+    amber.emit("room:start");
+    const q = await asked;
+    assert.equal(q.phase, "asking", "nothing runs until vy has answered");
+    assert.deepEqual(q.asking.waitingFor, ["vy"]);
+    const [a, b] = [stateWhere(vy, (st) => st.phase === "focus"), stateWhere(amber, (st) => st.phase === "focus")];
+    vy.emit("room:answer", true);
+    const [sa, sb] = await Promise.all([a, b]);
+    assert.equal(sa.running, true);
+    assert.deepEqual(sa.members.map((m) => m.following), [true, true]);
+    assert.equal(sa.endAt, sb.endAt);
+  } finally {
+    close();
+  }
 });
 
 test("a wrong code gets a clear answer and no room", async () => {
@@ -67,4 +81,27 @@ test("a wrong code gets a clear answer and no room", async () => {
   assert.equal(r.ok, false);
   assert.match(r.error, /No room/);
   close();
+});
+
+test("a break starts by itself on the server when focus ends, and everyone hears about it", async () => {
+  const { as, close } = await startServer();
+  try {
+    const vy = as("vy");
+    await once(vy, "connect");
+    await ask(vy, "room:create");
+    const states = [];
+    vy.on("room:state", (st) => states.push(st));
+    // 1-second "minutes": a 1-minute focus ends after 1 s
+    vy.emit("room:start", { preset: { focus: 1, short: 1, long: 1, every: 4 }, fast: true });
+    await new Promise((r) => setTimeout(r, 1500));
+    assert.equal(states[0].phase, "focus");
+    assert.equal(states.at(-1).phase, "asking");
+    assert.equal(states.at(-1).asking.phase, "short");
+    assert.equal(states.at(-1).seq, 2);
+    const started = stateWhere(vy, (st) => st.phase === "short");
+    vy.emit("room:answer", true);
+    assert.equal((await started).phase, "short");
+  } finally {
+    close();
+  }
 });

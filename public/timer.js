@@ -92,6 +92,9 @@ let endAt = null; // when running: the time it ends
 let remainingMs = minutesFor("focus") * UNIT; // when paused or stopped
 let tick = null;
 let lastSessionId = null; // the session the rating buttons apply to
+// Study room (further down): the room's last state, and whether my timer follows it
+let roomState = null;
+let roomFollowing = false;
 
 const RING_LENGTH = 2 * Math.PI * 52;
 els.ring.style.strokeDasharray = RING_LENGTH;
@@ -110,8 +113,15 @@ function currentRemaining() {
   return isRunning() ? endAt - Date.now() : remainingMs;
 }
 
+// Length of a phase in ms: the room's lengths while you follow the room timer, your own otherwise
+function totalFor(m) {
+  return roomFollowing && roomState && roomState.phase !== "idle"
+    ? roomState.preset[m] * roomState.unitMs
+    : minutesFor(m) * UNIT;
+}
+
 function render() {
-  const total = minutesFor(mode) * UNIT;
+  const total = totalFor(mode);
   const left = currentRemaining();
   els.time.textContent = format(left);
   els.ofTotal.textContent = `of ${format(total)}`;
@@ -202,6 +212,7 @@ async function finish() {
   stop();
   beep();
   notify(mode === "focus" ? "Focus session done. Time for a break!" : "Break's over. Ready to focus?");
+  if (roomFollowing) return finishWithRoom();
   if (mode === "focus") {
     round += 1;
     const minutes = minutesFor("focus");
@@ -293,7 +304,7 @@ function renderPresets() {
 }
 
 function applyPreset(key) {
-  if (isRunning() && !confirmChange()) return;
+  if ((isRunning() || roomFollowing) && !confirmChange()) return;
   settings = { ...settings, preset: key, ...pick(PRESETS[key], ["focus", "short", "long"]) };
   saveSettings();
   fillSettingsForm();
@@ -302,7 +313,9 @@ function applyPreset(key) {
 }
 
 function confirmChange() {
-  showMessage("The timer is running. Pause it first, then change the length.", true);
+  showMessage(roomFollowing
+    ? "You're on the room timer. Switch off \"Follow the room timer\" to change your own lengths."
+    : "The timer is running. Pause it first, then change the length.", true);
   return false;
 }
 
@@ -1043,6 +1056,8 @@ $("habit-form").addEventListener("submit", async (e) => {
 // Socket.IO connects only once you make or join a room (or were in one before a reload),
 // so the page costs nothing extra for people who never use rooms.
 let roomSocket = null;
+// The server's clock may differ from this computer's: endAt is the server's time
+let serverOffset = 0;
 const ME = document.body.dataset.username || "";
 
 // A short note inside the Study room card itself (not under the timer), gone after 3 seconds
@@ -1068,17 +1083,34 @@ function connectRoom() {
   }
   roomSocket = io({ transports: ["websocket", "polling"] });
   roomSocket.on("room:state", renderRoom);
+  // How far this computer's clock is from the server's, so everyone's countdown matches
+  roomSocket.on("room:clock", (serverNow) => { serverOffset = serverNow - Date.now(); });
   roomSocket.on("connect_error", (err) => roomError(err.message === "Log in to use study rooms" ? "Log in again to use study rooms." : "Can't reach the study room. Trying again…"));
   roomSocket.on("connect", () => roomError(""));
   return roomSocket;
 }
 
+// ---------- The room's shared timer ----------
+let roomAnswered = 0; // the last question (seq) answered, so each is asked once
+let roomJoinedMs = null; // focus time left when I joined (only those minutes are saved)
+let askTimer = null;
+let askShownFor = 0; // the question (seq) on screen, so a re-sent state doesn't restart it
+
+const ASK_MS = 15000;
+const PHASE_NAME = { focus: "Focus", short: "Short break", long: "Long break" };
+
 function renderRoom(state) {
+  const before = roomState;
+  roomState = state;
   const inRoom = Boolean(state);
   $("room-out").hidden = inRoom;
   $("room-in").hidden = !inRoom;
   try { inRoom ? localStorage.setItem("inRoom", "1") : localStorage.removeItem("inRoom"); } catch { /* fine without */ }
-  if (!inRoom) return;
+  if (!inRoom) {
+    if (roomFollowing) leaveRoomTimer(true);
+    hideAsk();
+    return;
+  }
   $("room-code").textContent = state.code;
   const others = state.members.length - 1;
   $("room-people").textContent = others === 0
@@ -1086,13 +1118,225 @@ function renderRoom(state) {
     : `You and ${others === 1 ? "1 other person are" : `${others} others are`} in this room.`;
   const list = $("room-members");
   list.innerHTML = "";
-  for (const name of state.members) {
+  for (const m of state.members) {
     const li = document.createElement("li");
-    li.textContent = name === state.host ? `${name} (host)` : name;
-    if (name === ME) li.className = "me";
+    const own = state.phase !== "idle" && state.phase !== "asking" && !m.following;
+    li.textContent = `${m.name}${m.name === state.host ? " (host)" : ""}${own ? " · own timer" : ""}`;
+    li.className = [m.name === ME ? "me" : "", own ? "own" : ""].join(" ").trim();
     list.append(li);
   }
+
+  // Who did what: "Amber paused", shown once per change
+  const a = state.lastAction;
+  if (a?.by && a.by !== ME && JSON.stringify(a) !== JSON.stringify(before?.lastAction) && (roomFollowing || a.what === "stopped the timer")) {
+    roomNote(`${a.by} ${a.what === "started" ? "started a focus" : a.what}.`);
+  }
+
+  // The room timer stopped (someone pressed reset, or a break ended): my timer leaves it
+  if (state.phase === "idle") {
+    hideAsk();
+    if (roomFollowing) leaveRoomTimer(a?.what === "stopped the timer");
+  } else if (state.phase === "asking") {
+    // Someone pressed Start (or a break is due): nothing runs until everyone asked has answered,
+    // or 15 seconds are up. Only the people still to answer see the question.
+    if (state.asking.waitingFor.includes(ME)) {
+      if (askShownFor !== state.seq) askToJoin(state);
+    } else hideAsk();
+  } else {
+    hideAsk();
+    const meOn = state.members.find((m) => m.name === ME)?.following;
+    if (state.seq > roomAnswered) {
+      // The question is over and the timer has started: on it if I said yes (or started it)
+      roomAnswered = state.seq;
+      if (meOn) followRoom();
+      else if (roomFollowing) leaveRoomTimer(false);
+      else if (state.phase === "focus" && before === null && askShownFor !== state.seq) askToJoin(state); // just walked in mid-focus
+    } else if (roomFollowing) {
+      syncToRoom();
+    }
+  }
+  renderRoomTimer();
 }
+
+// My timer copies the room's: same phase, same end time (or the same time left while paused)
+function syncToRoom() {
+  const st = roomState;
+  stop();
+  mode = st.phase;
+  if (st.running) {
+    endAt = st.endAt - serverOffset;
+    tick = setInterval(onTick, 250);
+  } else {
+    remainingMs = st.remainingMs;
+  }
+  render();
+}
+
+function followRoom() {
+  // A focus of my own that I'd started is kept: the minutes I did are saved before I join
+  saveUnfinishedFocus();
+  roomFollowing = true;
+  // Time left in the room's focus right now (the state may be a few seconds old)
+  roomJoinedMs = roomState.phase !== "focus" ? null
+    : roomState.running ? Math.max(0, roomState.endAt - serverOffset - Date.now()) : roomState.remainingMs;
+  roomSocket.emit("room:follow", true);
+  if (mode === "focus" && !els.label.value.trim()) {
+    showMessage("You're on the room timer. Type what you're working on above, so it's saved with your session.");
+  }
+  syncToRoom();
+  renderRoomTimer();
+}
+
+// Off the room timer. saveWork: keep the focus minutes I did with the room
+function leaveRoomTimer(saveWork) {
+  if (saveWork) saveUnfinishedFocus();
+  roomFollowing = false;
+  roomJoinedMs = null;
+  stop();
+  mode = "focus";
+  remainingMs = minutesFor("focus") * UNIT;
+  render();
+  renderRoomTimer();
+}
+
+function setFollow(on) {
+  if (!roomState || roomState.phase === "idle") return;
+  roomAnswered = roomState.seq;
+  hideAsk();
+  if (on) followRoom();
+  else {
+    roomSocket.emit("room:follow", false);
+    leaveRoomTimer(true);
+  }
+}
+
+// The focus time already done on my timer (since I joined the room, or of my own focus), saved
+// when it would otherwise be lost: joining another session, leaving the room timer, a reset.
+function saveUnfinishedFocus() {
+  if (mode !== "focus") return;
+  const left = currentRemaining();
+  if (left <= 0) return; // a finished focus was already saved
+  const total = roomFollowing && roomJoinedMs !== null ? roomJoinedMs : minutesFor("focus") * UNIT;
+  const doneUnit = roomFollowing ? roomState?.unitMs ?? UNIT : UNIT;
+  const minutes = Math.floor((total - left) / doneUnit);
+  if (minutes >= 1 && total - left < total) {
+    if (!els.label.value.trim()) els.label.value = roomFollowing ? "Study room" : "Focus";
+    saveSession(minutes);
+  }
+}
+
+// My focus with the room ended: save the minutes I was there, then wait for the room's break question
+async function finishWithRoom() {
+  if (mode === "focus") {
+    const unit = roomState?.unitMs ?? UNIT;
+    const minutes = Math.max(1, Math.round((roomJoinedMs ?? totalFor("focus")) / unit));
+    if (!els.label.value.trim()) els.label.value = "Study room";
+    round += 1;
+    await saveSession(minutes);
+    roomJoinedMs = null;
+    els.completeText.textContent = `Nice work on “${els.label.value.trim()}”, together with your room.`;
+    els.ratingButtons.forEach((b) => b.setAttribute("aria-pressed", "false"));
+    els.startBreak.hidden = true;
+    els.completePanel.hidden = false;
+  }
+  remainingMs = 0;
+  render();
+}
+
+function askToJoin(state) {
+  askShownFor = state.seq;
+  const q = state.asking; // null when I walked in during a focus that's already running
+  const phase = q ? q.phase : state.phase;
+  const by = q ? q.by : state.lastAction?.by;
+  const mins = state.preset[phase];
+  $("room-ask-text").textContent = phase === "focus"
+    ? `${by ?? "Someone"} wants to start a ${mins}-minute focus. Join?`
+    : `Break: ${mins} mins. Take it with the room?`;
+  if (!q) $("room-ask-text").textContent = `${by ?? "Someone"} is in a ${mins}-minute focus. Join for the rest?`;
+  $("room-ask-yes").textContent = phase === "focus" ? "Join" : "Take the break";
+  $("room-ask-no").textContent = phase === "focus" ? "Not this one" : "Keep going on my own";
+  $("room-ask").hidden = false;
+  // The bar runs for exactly the time left to answer (15 seconds, less if the message was slow)
+  const ms = q ? Math.max(1000, q.askUntil - serverOffset - Date.now()) : ASK_MS;
+  const bar = $("room-ask-bar");
+  bar.style.animation = "none";
+  void bar.offsetWidth;
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) bar.style.animation = `ask-time ${ms}ms linear forwards`;
+  notify(phase === "focus" ? `${by ?? "Someone"} wants to start a focus in your study room.` : "Break time in your study room.");
+  clearTimeout(askTimer);
+  // No answer in time counts as "not this one" (the server does the same, so nobody waits longer)
+  const seq = state.seq;
+  askTimer = setTimeout(() => { if (roomState?.seq === seq && !$("room-ask").hidden) answer(false); }, ms);
+}
+function hideAsk() {
+  clearTimeout(askTimer);
+  $("room-ask").hidden = true;
+}
+function answer(yes) {
+  if (!roomState) return;
+  hideAsk();
+  if (roomState.phase === "asking") {
+    // The timer starts for everyone at once when the last person answers
+    roomSocket.emit("room:answer", yes);
+    return;
+  }
+  roomAnswered = roomState.seq;
+  if (yes) followRoom();
+  else if (roomFollowing) {
+    roomSocket.emit("room:follow", false);
+    leaveRoomTimer(false);
+  }
+}
+$("room-ask-yes").addEventListener("click", () => answer(true));
+$("room-ask-no").addEventListener("click", () => answer(false));
+$("room-follow").addEventListener("change", (e) => setFollow(e.target.checked));
+
+// The little line in the room card: what the room is doing, for people not on its timer too
+function renderRoomTimer() {
+  const st = roomState;
+  const box = $("room-timer");
+  box.hidden = !st || st.phase === "idle";
+  if (box.hidden) return;
+  if (st.phase === "asking") {
+    // "Waiting for amber… 12s": the person who pressed Start (and anyone who said yes) sees who's left
+    const q = st.asking;
+    const secs = Math.max(0, Math.ceil((q.askUntil - serverOffset - Date.now()) / 1000));
+    const who = q.waitingFor.filter((n) => n !== ME);
+    $("room-follow").closest(".room-switch").hidden = true;
+    $("room-phase").textContent = `Room: ${PHASE_NAME[q.phase]} of ${q.minutes} mins starts soon ·`;
+    $("room-left").textContent = who.length
+      ? `waiting for ${who.length <= 2 ? who.join(" and ") : `${who.length} people`} (${secs}s)`
+      : `${secs}s`;
+    return;
+  }
+  $("room-follow").closest(".room-switch").hidden = false;
+  $("room-follow").checked = roomFollowing;
+  $("room-phase").textContent = `Room: ${PHASE_NAME[st.phase]}${st.running ? "" : " (paused)"} ·`;
+  const left = st.running ? st.endAt - serverOffset - Date.now() : st.remainingMs;
+  $("room-left").textContent = `${format(left)} left`;
+}
+setInterval(() => { if (roomState && roomState.phase !== "idle") renderRoomTimer(); }, 1000);
+
+// Start / pause: in a room, the room's timer (a new focus asks the others); otherwise your own
+function startOrPause() {
+  if (roomFollowing) return roomSocket.emit(roomState?.running ? "room:pause" : "room:start");
+  if (roomState && roomState.phase === "idle" && !isRunning()) {
+    if (mode !== "focus") return start();
+    if (!els.label.value.trim()) {
+      showMessage("What are you working on? Type it above, then press Start.", true);
+      els.label.focus();
+      return;
+    }
+    // My own paused focus is kept before the room's starts
+    saveUnfinishedFocus();
+    return roomSocket.emit("room:start", {
+      preset: { focus: minutesFor("focus"), short: minutesFor("short"), long: minutesFor("long"), every: Number(settings.every), autoBreaks: Boolean(settings.auto) },
+      fast: FAST,
+    });
+  }
+  return isRunning() ? pause() : start();
+}
+
 
 $("room-create").addEventListener("click", () => {
   const s = connectRoom();
@@ -1113,6 +1357,7 @@ $("room-join-form").addEventListener("submit", (e) => {
   });
 });
 $("room-leave").addEventListener("click", () => {
+  if (roomFollowing) leaveRoomTimer(true);
   roomSocket?.emit("room:leave", null, () => renderRoom(null));
 });
 $("room-copy").addEventListener("click", async () => {
@@ -1134,8 +1379,8 @@ els.rangeTabs.forEach((tab) =>
     loadReport();
   }),
 );
-els.start.addEventListener("click", () => (isRunning() ? pause() : start()));
-els.navStarts.forEach((b) => b.addEventListener("click", () => (isRunning() ? pause() : start())));
+els.start.addEventListener("click", startOrPause);
+els.navStarts.forEach((b) => b.addEventListener("click", startOrPause));
 
 // ---------- Pages: Focus (timer + tasks) and Reports ----------
 // Switched in the page with the URL hash (#/ and #/reports), so a running timer never stops.
@@ -1178,12 +1423,18 @@ els.showMore.addEventListener("click", async () => {
 });
 els.reset.addEventListener("click", () => {
   els.completePanel.hidden = true;
+  if (roomFollowing) return roomSocket.emit("room:reset");
   setMode(mode);
 });
-els.skip.addEventListener("click", skip);
+els.skip.addEventListener("click", () => {
+  // Following the room: skipping a break ends it for the room; skipping focus leaves the room timer
+  if (roomFollowing && mode !== "focus") return roomSocket.emit("room:skipBreak");
+  if (roomFollowing) setFollow(false);
+  skip();
+});
 els.tabs.forEach((tab) =>
   tab.addEventListener("click", () => {
-    if (isRunning()) return confirmChange();
+    if (isRunning() || roomFollowing) return confirmChange();
     els.completePanel.hidden = true;
     setMode(tab.dataset.mode);
   }),

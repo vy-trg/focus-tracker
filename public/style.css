@@ -731,3 +731,25 @@ body[data-view="reports"] #habits { display: none; }
 .room-members li { padding: 4px 10px; border-radius: 999px; background: var(--bg); font-size: 0.85rem; font-weight: 600; }
 .room-members li.me { background: var(--focus); color: #fff; }
 .room-note { margin: -2px 0 8px; font-size: 0.85rem; font-weight: 600; color: var(--focus); }
+
+/* Room timer, the follow switch and the join question */
+.room-timer { display: grid; gap: 8px; margin-bottom: 12px; padding: 10px 12px; border-radius: 14px; background: var(--bg); }
+.room-timer-line { margin: 0; font-size: 0.9rem; }
+.room-timer-line b { font-family: var(--mono); margin-left: 4px; }
+.room-ask { display: grid; gap: 10px; margin-bottom: 12px; padding: 12px; border-radius: 14px; border: 2px solid var(--focus); background: color-mix(in srgb, var(--focus) 10%, var(--screen)); }
+.room-ask p { margin: 0; font-weight: 700; }
+.room-ask-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.room-ask-bar { height: 4px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.room-ask-bar i { display: block; height: 100%; width: 100%; background: var(--focus); transform-origin: left; }
+.room-ask:not([hidden]) .room-ask-bar i { animation: ask-time 15s linear forwards; }
+@keyframes ask-time { to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .room-ask:not([hidden]) .room-ask-bar i { animation: none; } }
+.room-members li.own { opacity: 0.7; }
+.room-switch { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; cursor: pointer; font-weight: 700; font-size: 0.9rem; }
+.room-switch small { display: block; font-weight: 500; font-size: 0.78rem; color: var(--muted); }
+.room-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.room-switch-track { width: 40px; height: 24px; border-radius: 999px; background: var(--line); position: relative; transition: background-color 150ms; margin-top: 1px; }
+.room-switch-track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform 150ms; }
+.room-switch input:checked + .room-switch-track { background: var(--focus); }
+.room-switch input:checked + .room-switch-track::after { transform: translateX(16px); }
+.room-switch input:focus-visible + .room-switch-track { outline: 2px solid var(--focus); outline-offset: 2px; }
