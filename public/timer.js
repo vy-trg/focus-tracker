@@ -960,7 +960,10 @@ function renderHabits() {
     const streak = li.querySelector(".habit-streak");
     streak.textContent = `${h.streak} day${h.streak === 1 ? "" : "s"}`;
     const small = document.createElement("small");
-    small.textContent = h.streak === 0 ? "start today" : "streak";
+    const untilMidnight = msToMidnight();
+    const atRisk = h.streak > 0 && !h.today.done && untilMidnight <= AT_RISK_MS;
+    small.textContent = h.streak === 0 ? "start today" : atRisk ? `${formatLeft(untilMidnight)} left` : "streak";
+    streak.classList.toggle("at-risk", atRisk);
     streak.append(small);
 
     // Today: a bar that fills up, and "1 of 2" (it can go past the goal: 3 of 2 is fine)
@@ -1233,14 +1236,41 @@ function renderStreak(stats) {
     li.setAttribute("aria-label", `${name}, ${d.minutes > 0 ? `${d.minutes} minutes` : "no focus"}`);
     dots.append(li);
   }
+  lastStreakStats = stats;
   const focusedToday = stats.today.count > 0;
+  const left = msToMidnight();
+  const atRisk = stats.streak > 0 && !focusedToday && left <= AT_RISK_MS;
   let note;
-  if (stats.streak === 0) note = "Finish one session today to start a streak.";
+  if (stats.streak === 0 && stats.lostStreak && !focusedToday) {
+    note = `Your ${stats.lostStreak.days}-day streak ended yesterday. One session today starts a new one.`;
+  } else if (stats.streak === 0) note = "Finish one session today to start a streak.";
+  else if (atRisk) note = `${formatLeft(left)} left to keep your ${stats.streak}-day streak. One session saves it.`;
   else if (!focusedToday) note = `One session today keeps your ${stats.streak}-day streak going.`;
   else if (stats.streak >= stats.bestStreak && stats.streak > 1) note = "Your longest streak yet.";
   else note = `Best: ${stats.bestStreak} day${stats.bestStreak === 1 ? "" : "s"}`;
   $("streak-note").textContent = note;
+  $("streak-note").classList.toggle("at-risk", atRisk);
 }
+
+// The last hours of the day (Brisbane time, like the streak): a streak not saved yet is "at risk"
+const AT_RISK_MS = 6 * 60 * 60 * 1000;
+function msToMidnight(now = Date.now()) {
+  const DAY = 86400000;
+  return DAY - ((now + 10 * 3600000) % DAY); // Brisbane is UTC+10 all year
+}
+// "5 hrs", "1 hr", "40 mins"
+function formatLeft(ms) {
+  const mins = Math.ceil(ms / 60000);
+  if (mins < 60) return `${mins} min${mins === 1 ? "" : "s"}`;
+  const hrs = Math.floor(mins / 60);
+  return `${hrs} hr${hrs === 1 ? "" : "s"}`;
+}
+// The countdown moves on by itself, and the day changes at midnight without a reload
+let lastStreakStats = null;
+setInterval(() => {
+  if (lastStreakStats) renderStreak(lastStreakStats);
+  if (habits.length) renderHabits();
+}, 60000);
 
 // ---------- Lofi music ----------
 // CC0 (public domain) tracks in public/audio, listed in tracks.json. Music plays only while a
