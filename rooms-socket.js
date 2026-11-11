@@ -31,11 +31,15 @@ function attachRooms(server, { middlewares = [], getUser = (socket) => socket.re
     clearTimeout(timers.get(code));
     timers.delete(code);
     const room = rooms.rooms.get(code);
-    if (!room || room.endAt === null) return;
+    if (!room) return;
+    // While asking: when the 15 seconds are up, start for whoever said yes
+    const due = room.pending ? room.pending.askUntil : room.endAt;
+    if (due === null) return;
     const t = setTimeout(() => {
       timers.delete(code);
-      if (rooms.advance(code, now())) broadcast(code);
-    }, Math.max(0, room.endAt - now()) + 50);
+      const moved = room.pending ? rooms.askTimeout(code, now()) : rooms.advance(code, now());
+      if (moved) broadcast(code);
+    }, Math.max(0, due - now()) + 50);
     t.unref?.();
     timers.set(code, t);
   };
@@ -118,7 +122,12 @@ function attachRooms(server, { middlewares = [], getUser = (socket) => socket.re
         broadcast(act()?.code);
       });
     }
-    // Yes / no to the room's timer
+    // Yes / no to the question asked before a focus or break starts
+    socket.on("room:answer", (yes) => {
+      if (limited(socket)) return;
+      broadcast(rooms.answer(user.id, Boolean(yes), now())?.code);
+    });
+    // Yes / no to the room's timer (the switch, while it's running)
     socket.on("room:follow", (on) => {
       if (limited(socket)) return;
       broadcast(rooms.follow(user.id, Boolean(on))?.code);

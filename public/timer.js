@@ -1094,7 +1094,9 @@ function connectRoom() {
 let roomAnswered = 0; // the last question (seq) answered, so each is asked once
 let roomJoinedMs = null; // focus time left when I joined (only those minutes are saved)
 let askTimer = null;
+let askShownFor = 0; // the question (seq) on screen, so a re-sent state doesn't restart it
 
+const ASK_MS = 15000;
 const PHASE_NAME = { focus: "Focus", short: "Short break", long: "Long break" };
 
 function renderRoom(state) {
@@ -1118,7 +1120,7 @@ function renderRoom(state) {
   list.innerHTML = "";
   for (const m of state.members) {
     const li = document.createElement("li");
-    const own = state.phase !== "idle" && !m.following;
+    const own = state.phase !== "idle" && state.phase !== "asking" && !m.following;
     li.textContent = `${m.name}${m.name === state.host ? " (host)" : ""}${own ? " · own timer" : ""}`;
     li.className = [m.name === ME ? "me" : "", own ? "own" : ""].join(" ").trim();
     list.append(li);
@@ -1134,16 +1136,24 @@ function renderRoom(state) {
   if (state.phase === "idle") {
     hideAsk();
     if (roomFollowing) leaveRoomTimer(a?.what === "stopped the timer");
-  } else if (state.seq > roomAnswered) {
-    // A new focus or break: the person who started it is on it; everyone else gets asked
-    if (state.phase === "focus" && a?.by === ME) {
+  } else if (state.phase === "asking") {
+    // Someone pressed Start (or a break is due): nothing runs until everyone asked has answered,
+    // or 15 seconds are up. Only the people still to answer see the question.
+    if (state.asking.waitingFor.includes(ME)) {
+      if (askShownFor !== state.seq) askToJoin(state);
+    } else hideAsk();
+  } else {
+    hideAsk();
+    const meOn = state.members.find((m) => m.name === ME)?.following;
+    if (state.seq > roomAnswered) {
+      // The question is over and the timer has started: on it if I said yes (or started it)
       roomAnswered = state.seq;
-      followRoom();
-    } else if (state.phase === "focus" || roomFollowing || before?.phase === "focus") {
-      askToJoin(state);
+      if (meOn) followRoom();
+      else if (roomFollowing) leaveRoomTimer(false);
+      else if (state.phase === "focus" && before === null && askShownFor !== state.seq) askToJoin(state); // just walked in mid-focus
+    } else if (roomFollowing) {
+      syncToRoom();
     }
-  } else if (roomFollowing) {
-    syncToRoom();
   }
   renderRoomTimer();
 }
@@ -1234,25 +1244,29 @@ async function finishWithRoom() {
 }
 
 function askToJoin(state) {
-  const by = state.lastAction?.by;
-  const mins = state.preset[state.phase];
-  $("room-ask-text").textContent = state.phase === "focus"
-    ? `${by ?? "Someone"} started a ${mins}-minute focus. Join?`
+  askShownFor = state.seq;
+  const q = state.asking; // null when I walked in during a focus that's already running
+  const phase = q ? q.phase : state.phase;
+  const by = q ? q.by : state.lastAction?.by;
+  const mins = state.preset[phase];
+  $("room-ask-text").textContent = phase === "focus"
+    ? `${by ?? "Someone"} wants to start a ${mins}-minute focus. Join?`
     : `Break: ${mins} mins. Take it with the room?`;
-  $("room-ask-yes").textContent = state.phase === "focus" ? "Join" : "Take the break";
-  $("room-ask-no").textContent = state.phase === "focus" ? "Not this one" : "Keep going on my own";
-  const ask = $("room-ask");
-  ask.hidden = false;
-  // Restart the 30-second bar
+  if (!q) $("room-ask-text").textContent = `${by ?? "Someone"} is in a ${mins}-minute focus. Join for the rest?`;
+  $("room-ask-yes").textContent = phase === "focus" ? "Join" : "Take the break";
+  $("room-ask-no").textContent = phase === "focus" ? "Not this one" : "Keep going on my own";
+  $("room-ask").hidden = false;
+  // The bar runs for exactly the time left to answer (15 seconds, less if the message was slow)
+  const ms = q ? Math.max(1000, q.askUntil - serverOffset - Date.now()) : ASK_MS;
   const bar = $("room-ask-bar");
   bar.style.animation = "none";
   void bar.offsetWidth;
-  bar.style.animation = "";
-  notify(state.phase === "focus" ? `${by ?? "Someone"} started a focus in your study room.` : "Break time in your study room.");
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) bar.style.animation = `ask-time ${ms}ms linear forwards`;
+  notify(phase === "focus" ? `${by ?? "Someone"} wants to start a focus in your study room.` : "Break time in your study room.");
   clearTimeout(askTimer);
-  // No answer in 30 seconds counts as "not this one", so nobody's timer is held up
+  // No answer in time counts as "not this one" (the server does the same, so nobody waits longer)
   const seq = state.seq;
-  askTimer = setTimeout(() => { if (roomState?.seq === seq) answer(false); }, 30000);
+  askTimer = setTimeout(() => { if (roomState?.seq === seq && !$("room-ask").hidden) answer(false); }, ms);
 }
 function hideAsk() {
   clearTimeout(askTimer);
@@ -1260,14 +1274,17 @@ function hideAsk() {
 }
 function answer(yes) {
   if (!roomState) return;
-  roomAnswered = roomState.seq;
   hideAsk();
+  if (roomState.phase === "asking") {
+    // The timer starts for everyone at once when the last person answers
+    roomSocket.emit("room:answer", yes);
+    return;
+  }
+  roomAnswered = roomState.seq;
   if (yes) followRoom();
   else if (roomFollowing) {
     roomSocket.emit("room:follow", false);
     leaveRoomTimer(false);
-  } else {
-    roomSocket.emit("room:follow", false);
   }
 }
 $("room-ask-yes").addEventListener("click", () => answer(true));
@@ -1280,6 +1297,19 @@ function renderRoomTimer() {
   const box = $("room-timer");
   box.hidden = !st || st.phase === "idle";
   if (box.hidden) return;
+  if (st.phase === "asking") {
+    // "Waiting for amber… 12s": the person who pressed Start (and anyone who said yes) sees who's left
+    const q = st.asking;
+    const secs = Math.max(0, Math.ceil((q.askUntil - serverOffset - Date.now()) / 1000));
+    const who = q.waitingFor.filter((n) => n !== ME);
+    $("room-follow").closest(".room-switch").hidden = true;
+    $("room-phase").textContent = `Room: ${PHASE_NAME[q.phase]} of ${q.minutes} mins starts soon ·`;
+    $("room-left").textContent = who.length
+      ? `waiting for ${who.length <= 2 ? who.join(" and ") : `${who.length} people`} (${secs}s)`
+      : `${secs}s`;
+    return;
+  }
+  $("room-follow").closest(".room-switch").hidden = false;
   $("room-follow").checked = roomFollowing;
   $("room-phase").textContent = `Room: ${PHASE_NAME[st.phase]}${st.running ? "" : " (paused)"} ·`;
   const left = st.running ? st.endAt - serverOffset - Date.now() : st.remainingMs;

@@ -741,7 +741,7 @@ body[data-view="reports"] #habits { display: none; }
 .room-ask-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .room-ask-bar { height: 4px; border-radius: 999px; background: var(--line); overflow: hidden; }
 .room-ask-bar i { display: block; height: 100%; width: 100%; background: var(--focus); transform-origin: left; }
-.room-ask:not([hidden]) .room-ask-bar i { animation: ask-time 30s linear forwards; }
+.room-ask:not([hidden]) .room-ask-bar i { animation: ask-time 15s linear forwards; }
 @keyframes ask-time { to { transform: scaleX(0); } }
 @media (prefers-reduced-motion: reduce) { .room-ask:not([hidden]) .room-ask-bar i { animation: none; } }
 .room-members li.own { opacity: 0.7; }

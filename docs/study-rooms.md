@@ -36,7 +36,8 @@ Decided with Vy:
 | Situation | What happens |
 |---|---|
 | Someone presses Start (room idle) | A focus starts for the room with **their** lengths (25/5, 50/10…) and their "start breaks automatically" setting. They're on it straight away. |
-| Everyone else | Asked: *"Amber started a 25-minute focus. Join?"* **Join** / **Not this one**. No answer in **30 seconds** counts as Not this one, so nobody is held up. |
+| Everyone else | Asked: *"Amber wants to start a 25-minute focus. Join?"* **Join** / **Not this one**. The timer **doesn't start yet**: it waits until everyone has answered, or **15 seconds** at most (no answer counts as Not this one). Then it starts for Amber and everyone who said Join, at the same moment. Amber sees *"waiting for chris (12s)"* meanwhile. |
+| A break is due | Same question to the people who did the focus; the break starts when they've answered (or 15 s). Nobody says yes: the room goes back to idle. |
 | Joining late | You join with the time that's left. Only the minutes you were there are saved. |
 | Focus ends, breaks automatic | Everyone who was on the focus is asked: *"Break: 5 mins. Take it with the room?"* **Take the break** / **Keep going on my own**. |
 | Pause / Resume / Reset | No question: it applies to everyone on the room timer at once, and says who did it ("Amber paused"). |
@@ -46,4 +47,4 @@ Decided with Vy:
 
 The server keeps `endAt` and moves a room on by itself when time is up (focus → break → idle). Each page counts down from `endAt`, corrected by the difference between the server's clock and the computer's (`room:clock`), so everyone sees the same seconds.
 
-Tests: rooms.js 19 (start, join late, follow on/off, pause/resume, automatic and long breaks, reset, skip break, lengths, fast mode); sockets 5 (including a break starting by itself on the server). Checked in two browsers: late join saved 13 of 15 minutes, a paused own focus saved as 4 minutes on joining, reset saved what each person did, the question went away after 30 seconds.
+Tests: rooms.js 19 (start, join late, follow on/off, pause/resume, automatic and long breaks, reset, skip break, lengths, fast mode); sockets 5 (including a break starting by itself on the server). Checked in two browsers: late join saved 13 of 15 minutes, a paused own focus saved as 4 minutes on joining, reset saved what each person did, the question went away after 30 seconds. Changed after Vy's test: the timer now waits for the answers (15 s at most) instead of starting straight away.

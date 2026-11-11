@@ -4,8 +4,9 @@
 // which is fine for a timer that lasts minutes, and nobody's sessions are lost (those are in Postgres).
 //
 // The shared timer: anyone in the room can start it. Starting a focus (or a break, when the room
-// has "breaks start automatically") asks the others whether they want to join; the client shows
-// that question, and each person who says yes "follows" the room. Pause, resume and reset apply
+// has "breaks start automatically") first asks the others whether they want to join. The timer
+// waits (phase "asking") until everyone asked has answered, or 15 seconds have gone by; then it
+// starts for the person who started it and everyone who said yes ("following"). Pause, resume and reset apply
 // straight away to everyone following. Music, task names and categories stay each person's own.
 
 // No 0/O or 1/I/L, so a code read out loud or copied by hand can't be mistyped
@@ -13,6 +14,7 @@ const CODE_LETTERS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 6;
 const MAX_MEMBERS = 12;
 const MINUTE = 60 * 1000;
+const ASK_MS = 15 * 1000; // how long the question waits for answers
 const DEFAULT_PRESET = { focus: 25, short: 5, long: 15, every: 4, autoBreaks: true };
 
 function makeCode(random = Math.random) {
@@ -64,7 +66,8 @@ class Rooms {
       following: new Set(), // who is on the room's timer right now
       preset: { ...DEFAULT_PRESET },
       unitMs: MINUTE,
-      phase: "idle", // "idle" | "focus" | "short" | "long"
+      phase: "idle", // "idle" | "asking" | "focus" | "short" | "long"
+      pending: null, // while asking: { phase, byId, askUntil, answers: Map(user id -> yes/no) }
       round: 0, // focus blocks finished in this cycle
       endAt: null, // while running: when this phase ends
       remainingMs: 0, // while paused
@@ -97,6 +100,7 @@ class Rooms {
     if (!room) return null;
     room.members.delete(userId);
     room.following.delete(userId);
+    if (room.members.size > 0 && room.pending) this.#beginIfReady(room, Date.now());
     if (room.members.size === 0) {
       this.rooms.delete(code);
       return null;
@@ -122,12 +126,9 @@ class Rooms {
     if (room.phase === "idle") {
       if (preset) room.preset = cleanPreset(preset);
       room.unitMs = fast ? 1000 : MINUTE;
-      room.phase = "focus";
-      room.endAt = now + this.#len(room, "focus");
-      room.seq += 1;
-      room.following = new Set([user.id]);
       room.lastAction = { by: user.username, what: "started" };
-    } else if (room.endAt === null) {
+      this.#ask(room, "focus", user.id, [...room.members.keys()], now);
+    } else if (room.phase !== "asking" && room.endAt === null) {
       room.endAt = now + room.remainingMs;
       room.following.add(user.id);
       room.lastAction = { by: user.username, what: "resumed" };
@@ -135,9 +136,58 @@ class Rooms {
     return room;
   }
 
+  // Ask the others before a focus or a break begins. Nobody else to ask: it begins at once.
+  #ask(room, phase, byId, askIds, now) {
+    const answers = new Map();
+    if (byId !== null) answers.set(byId, true);
+    room.seq += 1;
+    room.pending = { phase, byId, askUntil: now + ASK_MS, answers, askIds: new Set(askIds) };
+    room.phase = "asking";
+    room.endAt = null;
+    room.following = new Set();
+    this.#beginIfReady(room, now);
+  }
+
+  // Everyone asked has answered (or time is up): the timer starts for the yes's
+  #beginIfReady(room, now) {
+    const p = room.pending;
+    if (!p) return false;
+    const waiting = [...p.askIds].filter((id) => room.members.has(id) && !p.answers.has(id));
+    if (waiting.length > 0 && now < p.askUntil) return false;
+    const yes = [...p.answers].filter(([id, ok]) => ok && room.members.has(id)).map(([id]) => id);
+    room.pending = null;
+    if (yes.length === 0) {
+      // Nobody wanted the break: the room goes back to idle
+      room.phase = "idle";
+      if (p.phase === "long") room.round = 0;
+      return true;
+    }
+    room.phase = p.phase;
+    room.endAt = now + this.#len(room, p.phase);
+    room.following = new Set(yes);
+    return true;
+  }
+
+  // Yes / no to the question
+  answer(userId, yes, now) {
+    const room = this.roomOf(userId);
+    if (!room || !room.pending || !room.pending.askIds.has(userId)) return room;
+    room.pending.answers.set(userId, Boolean(yes));
+    this.#beginIfReady(room, now);
+    return room;
+  }
+
+  // The question ran out of time (called by the server's timer)
+  askTimeout(code, now) {
+    const room = this.rooms.get(code);
+    if (!room || !room.pending || now < room.pending.askUntil) return null;
+    this.#beginIfReady(room, now);
+    return room;
+  }
+
   pause(user, now) {
     const room = this.roomOf(user.id);
-    if (!room || room.endAt === null) return room;
+    if (!room || room.endAt === null || room.phase === "asking") return room;
     room.remainingMs = Math.max(0, room.endAt - now);
     room.endAt = null;
     room.lastAction = { by: user.username, what: "paused" };
@@ -149,6 +199,7 @@ class Rooms {
     const room = this.roomOf(user.id);
     if (!room) return room;
     room.phase = "idle";
+    room.pending = null;
     room.endAt = null;
     room.remainingMs = 0;
     room.following.clear();
@@ -171,7 +222,7 @@ class Rooms {
   follow(userId, on) {
     const room = this.roomOf(userId);
     if (!room) return room;
-    if (on && room.phase !== "idle") room.following.add(userId);
+    if (on && room.phase !== "idle" && room.phase !== "asking") room.following.add(userId);
     else room.following.delete(userId);
     return room;
   }
@@ -180,14 +231,12 @@ class Rooms {
   // automatically) or back at idle; a break always ends at idle (focus needs someone to press Start).
   advance(code, now) {
     const room = this.rooms.get(code);
-    if (!room || room.endAt === null || room.endAt > now) return null;
+    if (!room || room.phase === "asking" || room.endAt === null || room.endAt > now) return null;
     if (room.phase === "focus") {
       room.round += 1;
-      if (room.preset.autoBreaks) {
-        room.phase = room.round >= room.preset.every ? "long" : "short";
-        room.endAt = now + this.#len(room, room.phase);
-        room.seq += 1;
+      if (room.preset.autoBreaks && room.following.size > 0) {
         room.lastAction = { by: null, what: "break" };
+        this.#ask(room, room.round >= room.preset.every ? "long" : "short", null, [...room.following], now);
         return room;
       }
     } else if (room.phase === "long") {
@@ -213,7 +262,16 @@ class Rooms {
       running: room.endAt !== null && room.endAt > now,
       endAt: room.endAt,
       remainingMs: room.endAt !== null ? Math.max(0, room.endAt - now) : room.remainingMs,
-      totalMs: room.phase === "idle" ? 0 : this.#len(room, room.phase),
+      totalMs: room.phase === "idle" || room.phase === "asking" ? 0 : this.#len(room, room.phase),
+      // While asking: what's about to start, who started it, until when, and who hasn't answered yet
+      asking: room.pending && {
+        phase: room.pending.phase,
+        minutes: room.preset[room.pending.phase],
+        by: room.pending.byId === null ? null : room.members.get(room.pending.byId),
+        askUntil: room.pending.askUntil,
+        asked: [...room.pending.askIds].filter((id) => room.members.has(id)).map((id) => room.members.get(id)),
+        waitingFor: [...room.pending.askIds].filter((id) => room.members.has(id) && !room.pending.answers.has(id)).map((id) => room.members.get(id)),
+      },
       seq: room.seq,
       lastAction: room.lastAction,
       host: room.members.get(room.hostId),
@@ -222,4 +280,4 @@ class Rooms {
   }
 }
 
-module.exports = { Rooms, makeCode, normaliseCode, cleanPreset, CODE_LETTERS, CODE_LENGTH, MAX_MEMBERS };
+module.exports = { Rooms, makeCode, normaliseCode, cleanPreset, ASK_MS, CODE_LETTERS, CODE_LENGTH, MAX_MEMBERS };
