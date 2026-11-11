@@ -730,3 +730,4 @@ body[data-view="reports"] #habits { display: none; }
 .room-members { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .room-members li { padding: 4px 10px; border-radius: 999px; background: var(--bg); font-size: 0.85rem; font-weight: 600; }
 .room-members li.me { background: var(--focus); color: #fff; }
+.room-note { margin: -2px 0 8px; font-size: 0.85rem; font-weight: 600; color: var(--focus); }

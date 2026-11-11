@@ -1045,6 +1045,16 @@ $("habit-form").addEventListener("submit", async (e) => {
 let roomSocket = null;
 const ME = document.body.dataset.username || "";
 
+// A short note inside the Study room card itself (not under the timer), gone after 3 seconds
+let roomNoteTimer = null;
+function roomNote(text) {
+  const el = $("room-note");
+  el.textContent = text;
+  el.hidden = false;
+  clearTimeout(roomNoteTimer);
+  roomNoteTimer = setTimeout(() => { el.hidden = true; }, 3000);
+}
+
 function roomError(text) {
   $("room-error").textContent = text;
   $("room-error").hidden = !text;
@@ -1073,7 +1083,7 @@ function renderRoom(state) {
   const others = state.members.length - 1;
   $("room-people").textContent = others === 0
     ? "Just you so far. Send the code to a friend."
-    : `${state.members.length} people focusing together.`;
+    : `You and ${others === 1 ? "1 other person are" : `${others} others are`} in this room.`;
   const list = $("room-members");
   list.innerHTML = "";
   for (const name of state.members) {
@@ -1108,9 +1118,9 @@ $("room-leave").addEventListener("click", () => {
 $("room-copy").addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText($("room-code").textContent);
-    showMessage("Room code copied");
+    roomNote("Code copied. Send it to a friend.");
   } catch {
-    showMessage(`Room code: ${$("room-code").textContent}`);
+    roomNote(`Copy didn't work here. The code is ${$("room-code").textContent}.`);
   }
 });
 // Were you in a room before reloading? Reconnect: the server puts you back in it
