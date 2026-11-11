@@ -669,6 +669,7 @@ button:active, .btn:active, .preset:active, .round-btn:active, .icon-btn:active 
   font: 600 0.65rem var(--mono); color: var(--muted); background: var(--bg); }
 .week-dots li.on { background: var(--focus); color: #fff; }
 .streak-note { margin: 0; font-size: 0.85rem; color: var(--muted); }
+.streak-note.at-risk { color: var(--focus); font-weight: 600; }
 .lofi { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 12px auto 0; max-width: 420px; }
 .lofi-toggle { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 0.9rem; font-weight: 600;
   padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: inherit; cursor: pointer; }
@@ -706,6 +707,7 @@ body.focus-mode .lofi { display: none; }
 .habit-meta { font-size: 0.8rem; color: var(--muted); }
 .habit-streak { text-align: right; font: 600 0.85rem var(--mono); white-space: nowrap; }
 .habit-streak small { display: block; font-family: inherit; font-weight: 600; font-size: 0.7rem; color: var(--muted); }
+.habit-streak.at-risk, .habit-streak.at-risk small { color: var(--focus); }
 .habit-progress { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; }
 .habit-bar { flex: 1; height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; }
 .habit-bar i { display: block; height: 100%; border-radius: 999px; background: var(--focus); transition: width 300ms var(--ease-out, ease-out); }
