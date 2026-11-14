@@ -28,6 +28,10 @@ CREATE TABLE IF NOT EXISTS sessions (
   started_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Sessions finished offline carry an id made by the page, so sending one twice saves it once
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS client_id UUID;
+CREATE UNIQUE INDEX IF NOT EXISTS sessions_user_client_idx ON sessions (user_id, client_id) WHERE client_id IS NOT NULL;
+
 CREATE INDEX IF NOT EXISTS sessions_user_started_idx ON sessions (user_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions (user_id, id DESC);
 

@@ -154,3 +154,22 @@ test("validateHabit for PATCH: any one field is enough, an empty body is not", (
   assert.deepEqual(validateHabit({}, true).map((e) => e.field), ["body"]);
   assert.equal(validateHabit({ category: "nap" }, true)[0].field, "category");
 });
+
+// ---------- Sessions finished offline ----------
+const { parseFinishedAt } = require("../validation");
+
+test("a session sent later can carry its own id and when it finished", () => {
+  const now = Date.parse("2026-11-14T05:00:00Z");
+  const ok = { label: "Essay", minutes: 25, client_id: "3f2b8c1e-9a4d-4b7e-8c21-0d5e6f7a8b9c", finished_at: "2026-11-14T03:00:00Z" };
+  assert.deepEqual(validateSession(ok, now), []);
+  assert.match(validateSession({ ...ok, client_id: "not-a-uuid" }, now)[0].message, /UUID/);
+});
+
+test("finished_at: up to 30 days ago, never in the future (5 minutes leeway for a fast clock)", () => {
+  const now = Date.parse("2026-11-14T05:00:00Z");
+  assert.ok(parseFinishedAt("2026-10-16T06:00:00Z", now));
+  assert.equal(parseFinishedAt("2026-10-14T05:00:00Z", now), null, "older than 30 days");
+  assert.ok(parseFinishedAt("2026-11-14T05:04:00Z", now), "a clock 4 minutes ahead is fine");
+  assert.equal(parseFinishedAt("2026-11-14T06:00:00Z", now), null, "an hour in the future");
+  assert.equal(parseFinishedAt("yesterday", now), null);
+});

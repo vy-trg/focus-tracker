@@ -11,8 +11,26 @@ function parseId(raw) {
 // Returns a list of problems with the body; an empty list means it is valid.
 // "= {}" means a request with no body at all gets 400 instead of crashing.
 // category and task_id are optional: no category means "study", no task_id means no task.
-function validateSession({ label, minutes, category, task_id } = {}) {
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+
+// A session finished offline: when it finished (sent later). Up to 30 days ago, and not in the future
+// (a few minutes' leeway for a phone clock that's a little ahead). Returns the Date, or null if it's wrong.
+function parseFinishedAt(value, now = Date.now()) {
+  if (typeof value !== "string") return null;
+  const t = Date.parse(value);
+  if (Number.isNaN(t) || t > now + 5 * 60 * 1000 || t < now - MONTH_MS) return null;
+  return new Date(t);
+}
+
+function validateSession({ label, minutes, category, task_id, client_id, finished_at } = {}, now = Date.now()) {
   const errors = [];
+  if (client_id !== undefined && client_id !== null && !(typeof client_id === "string" && UUID.test(client_id))) {
+    errors.push({ field: "client_id", message: "client_id must be a UUID" });
+  }
+  if (finished_at !== undefined && finished_at !== null && parseFinishedAt(finished_at, now) === null) {
+    errors.push({ field: "finished_at", message: "finished_at must be a time in the last 30 days" });
+  }
   if (typeof label !== "string" || label.trim().length === 0 || label.trim().length > 60) {
     errors.push({ field: "label", message: "Label must be 1-60 characters" });
   }
@@ -108,6 +126,7 @@ function parseLimit(raw) {
 }
 
 module.exports = {
+  parseFinishedAt,
   CATEGORIES,
   parseRange,
   parseLimit,
