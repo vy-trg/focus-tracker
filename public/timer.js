@@ -391,35 +391,97 @@ async function api(path, options = {}) {
 }
 
 // ---------- Sessions ----------
-// If saving fails (e.g. Wi-Fi drops), the session is kept here and sent again
-// when the connection comes back, so a finished focus block is never lost.
-let unsaved = null;
+// Every finished session goes into a queue on this device first (localStorage), then is sent.
+// Offline, or if the server can't be reached, it simply waits there, even if the page is closed,
+// and is sent when the connection comes back (or the next time the page opens). Each one carries
+// an id made here (client_id) so it is never saved twice, and the time it finished, so it counts
+// for the right day. One queue per account, so a shared device never sends one person's session
+// as another's.
+const QUEUE_KEY = `ft-unsent-${document.body.dataset.username}`;
+function readQueue() {
+  try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]"); } catch { return []; }
+}
+function writeQueue(q) {
+  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); } catch { /* storage full or blocked: still tried once */ }
+  renderOfflineNote(q.length);
+}
+const newId = () => (crypto.randomUUID ? crypto.randomUUID()
+  : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)));
 
 async function saveSession(minutes) {
-  unsaved = {
+  const q = readQueue();
+  q.push({
+    client_id: newId(),
     label: els.label.value.trim(),
     minutes,
     category: els.category.value,
     task_id: els.taskSelect.value ? Number(els.taskSelect.value) : null,
-  };
-  await sendUnsaved();
+    finished_at: new Date().toISOString(),
+  });
+  writeQueue(q);
+  await sendQueued(true);
 }
 
-async function sendUnsaved() {
-  if (!unsaved) return;
+// Sends what's waiting, oldest first. justFinished: the last one is the session that just ended
+// (so "How focused did you feel?" can be saved on it).
+let sending = false;
+async function sendQueued(justFinished = false) {
+  if (sending) return;
+  sending = true;
+  let sent = 0;
   try {
-    const saved = await api("/api/sessions", { method: "POST", body: JSON.stringify(unsaved) });
-    showMessage(`Saved ${unsaved.minutes} minutes. Nice!`);
-    unsaved = null;
-    lastSessionId = saved.id;
-    refreshAll();
-  } catch (err) {
-    lastSessionId = null;
-    showMessage(`Couldn't save this session yet. ${err.message} We'll keep it and try again.`, true);
-    setTimeout(sendUnsaved, 15000);
+    for (let q = readQueue(); q.length > 0; q = readQueue()) {
+      const item = q[0];
+      let saved;
+      try {
+        saved = await api("/api/sessions", { method: "POST", body: JSON.stringify(item) });
+      } catch (err) {
+        // The server said no (e.g. the task was deleted, or it's over a week old): it can never be
+        // saved as it is, so it leaves the queue with a message instead of blocking the rest
+        if (navigator.onLine && /must|Unknown|week/.test(err.message)) {
+          writeQueue(readQueue().filter((x) => x.client_id !== item.client_id));
+          showMessage(`A session from ${new Date(item.finished_at).toLocaleString("en-AU")} couldn't be saved: ${err.message}`, true);
+          continue;
+        }
+        lastSessionId = null;
+        const n = readQueue().length;
+        showMessage(navigator.onLine
+          ? `Couldn't save yet: ${err.message} It's kept on this device and will be sent again.`
+          : `You're offline. ${n === 1 ? "This session is" : `${n} sessions are`} kept on this device and will be sent when you're back online.`);
+        setTimeout(() => sendQueued(), 30000);
+        return;
+      }
+      writeQueue(readQueue().filter((x) => x.client_id !== item.client_id));
+      sent += 1;
+      if (justFinished && readQueue().length === 0) lastSessionId = saved.id;
+    }
+    if (sent > 0) {
+      showMessage(justFinished && sent === 1 ? "Saved. Nice!" : `Back online: ${sent} session${sent === 1 ? "" : "s"} saved.`);
+      refreshAll();
+    }
+  } finally {
+    sending = false;
   }
 }
-window.addEventListener("online", sendUnsaved);
+window.addEventListener("online", () => sendQueued());
+
+// "2 sessions waiting to be sent" under the timer while anything is queued
+function renderOfflineNote(n = readQueue().length) {
+  const note = document.getElementById("offline-note");
+  if (!note) return;
+  note.hidden = n === 0;
+  note.textContent = n === 0 ? "" : `${n} session${n === 1 ? "" : "s"} saved on this device, waiting to be sent${navigator.onLine ? "…" : " (you're offline)."}`;
+}
+window.addEventListener("offline", () => renderOfflineNote());
+
+// The app's files stay on this device (sw.js), so the page opens and the timer runs offline
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+}
+// Logging out removes the stored copies of your pages and data from this device
+document.querySelector('form[action="/logout"]')?.addEventListener("submit", () => {
+  navigator.serviceWorker?.controller?.postMessage("clear");
+});
 
 async function rate(value) {
   if (!lastSessionId) return;
@@ -1472,6 +1534,9 @@ fillSettingsForm();
 renderPresets();
 render();
 refreshAll();
+// Anything finished offline last time goes now
+renderOfflineNote();
+sendQueued();
 
 // ---------- Streak: last 7 days and a short note ----------
 function renderStreak(stats) {

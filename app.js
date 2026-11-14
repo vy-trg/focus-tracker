@@ -20,6 +20,7 @@ const {
   parseRange,
   parseLimit,
   validateHabit,
+  parseFinishedAt,
 } = require("./validation");
 
 const app = express();
@@ -179,13 +180,20 @@ app.post("/api/sessions", async (req, res) => {
     if (taskId !== null && !(await db.taskBelongsToUser(taskId, req.user.id))) {
       return res.status(400).json({ errors: [{ field: "task_id", message: "Unknown task" }] });
     }
+    // Sent later from a phone that was offline: dated when it was done, not when it arrived
+    const finished = req.body.finished_at ? parseFinishedAt(req.body.finished_at) : null;
+    const minutes = Number(req.body.minutes);
     const session = await db.insertSession(req.user.id, {
       label: req.body.label.trim(),
-      minutes: Number(req.body.minutes),
+      minutes,
       category: req.body.category || "study",
       taskId,
+      clientId: req.body.client_id || null,
+      startedAt: finished ? new Date(finished.getTime() - minutes * 60 * 1000).toISOString() : null,
     });
-    res.status(201).json(session); // includes the new id
+    const { duplicate, ...saved } = session;
+    // Already saved (the same session sent twice): 200 with the one we have, not a second copy
+    res.status(duplicate ? 200 : 201).json(saved); // includes the id
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server Error" });

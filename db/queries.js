@@ -28,14 +28,22 @@ async function getSessionsPage(userId, limit, before) {
 }
 
 // 2. Save a finished focus session
-async function insertSession(userId, { label, minutes, category, taskId }) {
+// A session finished offline and sent later keeps the time it really happened (startedAt), and
+// its clientId: sending the same session again returns the one already saved instead of a copy.
+async function insertSession(userId, { label, minutes, category, taskId, clientId = null, startedAt = null }) {
   const { rows } = await pool.query(
-    `INSERT INTO sessions (user_id, label, minutes, category, task_id)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO sessions (user_id, label, minutes, category, task_id, client_id, started_at)
+     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamptz, now()))
+     ON CONFLICT (user_id, client_id) WHERE client_id IS NOT NULL DO NOTHING
      RETURNING id, label, minutes, category, task_id, rating, started_at`,
-    [userId, label, minutes, category, taskId]
+    [userId, label, minutes, category, taskId, clientId, startedAt]
   );
-  return rows[0];
+  if (rows[0]) return { ...rows[0], duplicate: false };
+  const old = await pool.query(
+    `SELECT id, label, minutes, category, task_id, rating, started_at FROM sessions WHERE user_id = $1 AND client_id = $2`,
+    [userId, clientId]
+  );
+  return { ...old.rows[0], duplicate: true };
 }
 
 // 3. Delete one of this user's sessions (0 rows deleted -> the route answers 404)

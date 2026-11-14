@@ -755,3 +755,6 @@ body[data-view="reports"] #habits { display: none; }
 .room-switch input:checked + .room-switch-track { background: var(--focus); }
 .room-switch input:checked + .room-switch-track::after { transform: translateX(16px); }
 .room-switch input:focus-visible + .room-switch-track { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Sessions kept on this device until the connection is back */
+.offline-note { margin: 4px 0 0; font-size: 0.8rem; color: var(--muted); }
