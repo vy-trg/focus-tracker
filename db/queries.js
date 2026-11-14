@@ -263,7 +263,46 @@ async function deleteHabit(id, userId) {
   return result.rowCount;
 }
 
+// ---------- Health reminders ----------
+async function getReminderSettings(userId) {
+  const { rows } = await pool.query(
+    "SELECT eye_reminder, water_reminder, water_every FROM users WHERE id = $1",
+    [userId]
+  );
+  return rows[0];
+}
+
+async function updateReminderSettings(userId, { eye, water, waterEvery }) {
+  const { rows } = await pool.query(
+    `UPDATE users SET eye_reminder = COALESCE($2, eye_reminder), water_reminder = COALESCE($3, water_reminder),
+       water_every = COALESCE($4, water_every)
+     WHERE id = $1 RETURNING eye_reminder, water_reminder, water_every`,
+    [userId, eye ?? null, water ?? null, waterEvery ?? null]
+  );
+  return rows[0];
+}
+
+async function addHealthBreak(userId, kind) {
+  await pool.query("INSERT INTO health_breaks (user_id, kind) VALUES ($1, $2)", [userId, kind]);
+}
+
+// Today's eye breaks and glasses of water (today in Brisbane, like the rest of the stats)
+async function getHealthToday(userId) {
+  const { rows } = await pool.query(
+    `SELECT kind, count(*)::int AS n FROM health_breaks
+     WHERE user_id = $1 AND (at AT TIME ZONE 'Australia/Brisbane')::date = (now() AT TIME ZONE 'Australia/Brisbane')::date
+     GROUP BY kind`,
+    [userId]
+  );
+  const n = (k) => rows.find((r) => r.kind === k)?.n ?? 0;
+  return { eye: n("eye"), water: n("water") };
+}
+
 module.exports = {
+  getReminderSettings,
+  updateReminderSettings,
+  addHealthBreak,
+  getHealthToday,
   getHabits,
   getHabitsWithProgress,
   insertHabit,

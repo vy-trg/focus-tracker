@@ -7,9 +7,9 @@
 // Copies are looked up with ignoreVary: the server answers "Vary: Accept…", and the page stored at
 // install time was asked for differently from a real page load, so a strict match would miss it.
 // - Anything else (saving, logging in, the study room): the network only. Never cached.
-const VERSION = "v4";
+const VERSION = "v5";
 const CACHE = `focus-tracker-${VERSION}`;
-const SHELL = ["/", "/style.css", "/timer.js", "/socket.io/socket.io.min.js"];
+const SHELL = ["/", "/style.css", "/reminders.js", "/timer.js", "/socket.io/socket.io.min.js"];
 
 self.addEventListener("install", (event) => {
   // addAll fails if one file fails; one at a time, so a missing file doesn't stop the rest

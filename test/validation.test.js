@@ -173,3 +173,14 @@ test("finished_at: up to 30 days ago, never in the future (5 minutes leeway for 
   assert.equal(parseFinishedAt("2026-11-14T06:00:00Z", now), null, "an hour in the future");
   assert.equal(parseFinishedAt("yesterday", now), null);
 });
+
+// ---------- Health reminder choices ----------
+const { validateReminderSettings } = require("../validation");
+
+test("reminder choices: on/off and water every 15-120 minutes", () => {
+  assert.deepEqual(validateReminderSettings({ eye: true, water: false, waterEvery: 45 }), []);
+  assert.deepEqual(validateReminderSettings({}), [], "nothing to change is fine");
+  assert.equal(validateReminderSettings({ eye: "yes" })[0].field, "eye");
+  assert.equal(validateReminderSettings({ waterEvery: 5 })[0].field, "waterEvery");
+  assert.equal(validateReminderSettings({ waterEvery: 30.5 })[0].field, "waterEvery");
+});

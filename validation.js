@@ -125,7 +125,21 @@ function parseLimit(raw) {
   return Number.isInteger(n) && n >= 1 && n <= 100 ? n : null;
 }
 
+// Reminder choices: any of eye (true/false), water (true/false), waterEvery (15-120 minutes)
+function validateReminderSettings(body = {}) {
+  const errors = [];
+  for (const k of ["eye", "water"]) {
+    if (body[k] !== undefined && typeof body[k] !== "boolean") errors.push({ field: k, message: `${k} must be true or false` });
+  }
+  if (body.waterEvery !== undefined) {
+    const n = Number(body.waterEvery);
+    if (!Number.isInteger(n) || n < 15 || n > 120) errors.push({ field: "waterEvery", message: "Water reminder must be every 15 to 120 minutes" });
+  }
+  return errors;
+}
+
 module.exports = {
+  validateReminderSettings,
   parseFinishedAt,
   CATEGORIES,
   parseRange,
