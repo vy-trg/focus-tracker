@@ -117,6 +117,18 @@
         </div>
 
         <!-- Shown after a focus session ends -->
+        <!-- A health reminder during focus: the timer keeps running underneath -->
+        <div class="health-card" id="health-card" role="alertdialog" aria-labelledby="health-title" aria-describedby="health-text" hidden>
+          <div class="health-ring" id="health-ring" hidden><span id="health-secs">20</span></div>
+          <div>
+            <h3 id="health-title">Eye break</h3>
+            <p id="health-text">Look at something about 6 metres away.</p>
+          </div>
+          <div class="health-actions">
+            <button type="button" class="btn btn-small" id="health-done">Done</button>
+            <button type="button" class="btn btn-ghost btn-small" id="health-skip">Skip</button>
+          </div>
+        </div>
         <div class="panel" id="complete-panel" hidden>
           <h3>Session complete!</h3>
           <p id="complete-text">Nice work. Take a breather, you earned it.</p>
@@ -143,7 +155,16 @@
             <label>Long break every<input type="number" id="set-every" min="2" max="8"></label>
             <label class="switch">Play a sound when time is up <input type="checkbox" role="switch" id="set-sound"></label>
             <label class="switch">Notify me when I'm in another tab <input type="checkbox" role="switch" id="set-notify"></label>
+            <p class="setting-note" id="notify-note" hidden></p>
             <label class="switch">Start breaks automatically <input type="checkbox" role="switch" id="set-auto"></label>
+            <!-- Health reminders while focusing; kept with the account, so they follow you to another device -->
+            <fieldset class="health-settings">
+              <legend>While you focus</legend>
+              <label class="switch">Eye breaks (20-20-20) <input type="checkbox" role="switch" id="set-eye"></label>
+              <label class="switch">Water reminder <input type="checkbox" role="switch" id="set-water"></label>
+              <label>Water every (min)<input type="number" id="set-water-every" min="15" max="120"></label>
+              <p class="setting-note">Eye breaks: every 20 minutes of focus, look at something about 6 metres away for 20 seconds (the 20-20-20 rule, from the American Academy of Ophthalmology). General tips for long screen time, not medical advice.</p>
+            </fieldset>
           </div>
         </details>
       </section>
@@ -189,6 +210,7 @@
             <div class="tl-track" id="tl-track"></div>
             <div class="tl-hours" id="tl-hours" aria-hidden="true"></div>
           </div>
+          <p class="health-today" id="health-today" hidden></p>
           <ul class="today-list" id="today-list" aria-busy="true"><li class="skeleton skeleton-row"></li></ul>
         </section>
 
@@ -325,6 +347,7 @@
 
   <!-- Served by Socket.IO itself; only used by the study room -->
   <script src="/socket.io/socket.io.min.js"></script>
+  <script src="/reminders.js"></script>
   <script src="/timer.js"></script>
 </body>
 </html>

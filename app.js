@@ -21,6 +21,7 @@ const {
   parseLimit,
   validateHabit,
   parseFinishedAt,
+  validateReminderSettings,
 } = require("./validation");
 
 const app = express();
@@ -147,6 +148,7 @@ app.use("/api/stats", requireAuth);
 app.use("/api/tasks", requireAuth);
 app.use("/api/habits", requireAuth);
 app.use("/api/reports", requireAuth);
+app.use("/api/reminders", requireAuth);
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true });
@@ -246,6 +248,47 @@ app.get("/api/stats", async (req, res) => {
   try {
     const stats = await db.getStats(req.user.id);
     res.json(stats);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server Error" });
+  }
+});
+
+// Health reminders: your choices (kept with your account) and today's count of breaks taken
+app.get("/api/reminders", async (req, res) => {
+  try {
+    const [s, today] = await Promise.all([db.getReminderSettings(req.user.id), db.getHealthToday(req.user.id)]);
+    res.json({ eye: s.eye_reminder, water: s.water_reminder, waterEvery: s.water_every, today });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server Error" });
+  }
+});
+
+app.patch("/api/reminders", async (req, res) => {
+  try {
+    const errors = validateReminderSettings(req.body);
+    if (errors.length > 0) return res.status(400).json({ errors });
+    const s = await db.updateReminderSettings(req.user.id, {
+      eye: req.body.eye,
+      water: req.body.water,
+      waterEvery: req.body.waterEvery === undefined ? undefined : Number(req.body.waterEvery),
+    });
+    res.json({ eye: s.eye_reminder, water: s.water_reminder, waterEvery: s.water_every });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server Error" });
+  }
+});
+
+// An eye break taken or a glass of water had: POST /api/reminders/done { kind: "eye" | "water" }
+app.post("/api/reminders/done", async (req, res) => {
+  try {
+    if (!["eye", "water"].includes(req.body?.kind)) {
+      return res.status(400).json({ errors: [{ field: "kind", message: "kind must be eye or water" }] });
+    }
+    await db.addHealthBreak(req.user.id, req.body.kind);
+    res.status(201).json(await db.getHealthToday(req.user.id));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server Error" });

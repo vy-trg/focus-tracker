@@ -174,6 +174,7 @@ function setMode(next) {
 }
 
 function start() {
+  lastFocusTick = Date.now();
   if (mode === "focus" && els.label.value.trim() === "") {
     showMessage("What are you working on? Type it above, then press Start.", true);
     els.label.focus();
@@ -201,6 +202,7 @@ function stop() {
 }
 
 function onTick() {
+  checkReminders();
   if (currentRemaining() <= 0) {
     finish();
   } else {
@@ -272,14 +274,35 @@ function beep() {
 // Browser notification when the timer ends while you're in another tab (only if you turned it on)
 function askNotificationPermission() {
   if (settings.notify && "Notification" in window && Notification.permission === "default") {
-    Notification.requestPermission();
+    return Notification.requestPermission().then(renderNotifyNote);
   }
+  return null;
 }
 function notify(text) {
   if (!settings.notify || !document.hidden) return;
-  if ("Notification" in window && Notification.permission === "granted") {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  // Through the service worker where there is one: the only way on iPhone (Home Screen app),
+  // and it also works on Android where new Notification() isn't allowed
+  if (navigator.serviceWorker?.controller) {
+    navigator.serviceWorker.ready.then((reg) => reg.showNotification("Focus Tracker", { body: text, tag: "focus-tracker" })).catch(() => {});
+  } else {
     new Notification("Focus Tracker", { body: text });
   }
+}
+
+// Under the switch: why a notification might not arrive, in plain words
+function renderNotifyNote() {
+  const note = $("notify-note");
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const homeScreen = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  let text = "";
+  if (!settings.notify) text = "";
+  else if (ios && !homeScreen) text = "On iPhone and iPad, notifications only work after you add Focus Tracker to your Home Screen (Share, then Add to Home Screen; iOS 16.4 or later) and open it from there.";
+  else if (!("Notification" in window)) text = "This browser can't show notifications. The sound still plays when time is up.";
+  else if (Notification.permission === "denied") text = "Notifications are blocked for this site. Allow them in your browser's site settings, then switch this off and on again.";
+  else if (Notification.permission === "default") text = "Your browser will ask for permission the next time you press Start.";
+  note.textContent = text;
+  note.hidden = !text;
 }
 
 function showMessage(text, isError = false) {
@@ -356,7 +379,8 @@ function onSettingsChange() {
   }
   saveSettings();
   renderPresets();
-  if (settings.notify) askNotificationPermission();
+  if (settings.notify) Promise.resolve(askNotificationPermission()).then(renderNotifyNote);
+  renderNotifyNote();
   if (!isRunning()) setMode(mode);
 }
 
@@ -759,6 +783,130 @@ function showUndo(text, onUndo) {
   };
   pendingDelete = entry;
 }
+
+// ---------- Health reminders while focusing (eye breaks, water) ----------
+// The rules are in reminders.js (tested). Here: count focus time, show the card, save what you did.
+// Only during focus: breaks and pauses don't count, and nothing pops up in a break.
+let reminderCfg = { eye: false, water: false, waterEvery: 45 };
+let focusMs = 0; // focus time this visit (ms of a real minute, also in ?fast mode)
+let lastFocusTick = null;
+let reminderState = Reminders.startReminders(reminderCfg);
+const reminderQueue = [];
+let eyeTimer = null;
+
+function checkReminders() {
+  const now = Date.now();
+  if (mode === "focus" && isRunning() && lastFocusTick !== null) focusMs += (now - lastFocusTick) * (60000 / UNIT);
+  lastFocusTick = isRunning() ? now : null;
+  if (mode !== "focus" || !isRunning()) return;
+  const r = Reminders.dueReminders(reminderState, focusMs);
+  reminderState = r.state;
+  for (const kind of r.due) if (!reminderQueue.includes(kind)) reminderQueue.push(kind);
+  if (r.due.length && $("health-card").hidden) showReminder();
+}
+
+function showReminder() {
+  const kind = reminderQueue[0];
+  if (!kind) return;
+  const card = $("health-card");
+  const eye = kind === "eye";
+  $("health-title").textContent = eye ? "Eye break" : "Time for some water";
+  $("health-text").textContent = eye ? "Look at something about 6 metres away (out a window, across the room) until the circle runs out." : "Have a few sips. Your timer keeps going.";
+  $("health-done").textContent = eye ? "Done" : "Had some";
+  $("health-ring").hidden = !eye;
+  card.hidden = false;
+  if (settings.sound) softChime();
+  notify(eye ? "Eye break: look about 6 metres away for 20 seconds." : "Time for some water.");
+  clearInterval(eyeTimer);
+  if (eye) {
+    const ends = Date.now() + Reminders.EYE_BREAK_SECS * 1000;
+    const draw = () => {
+      const left = Math.max(0, ends - Date.now());
+      $("health-secs").textContent = Math.ceil(left / 1000);
+      $("health-ring").style.setProperty("--p", String(left / (Reminders.EYE_BREAK_SECS * 1000)));
+      if (left <= 0) { clearInterval(eyeTimer); $("health-text").textContent = "Nice. Back to it."; }
+    };
+    draw();
+    eyeTimer = setInterval(draw, 200);
+  }
+}
+
+async function answerReminder(done) {
+  const kind = reminderQueue.shift();
+  clearInterval(eyeTimer);
+  $("health-card").hidden = true;
+  if (done && kind) {
+    try {
+      const today = await api("/api/reminders/done", { method: "POST", body: JSON.stringify({ kind }) });
+      renderHealthToday(today);
+    } catch (err) {
+      showMessage(`Couldn't save that. ${err.message}`, true);
+    }
+  }
+  if (reminderQueue.length) showReminder();
+}
+$("health-done").addEventListener("click", () => answerReminder(true));
+$("health-skip").addEventListener("click", () => answerReminder(false));
+
+// A soft two-note chime, quieter than the end-of-timer beep
+function softChime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [660, 880].forEach((f, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = f;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime + i * 0.18);
+      gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + i * 0.18 + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.18 + 0.4);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(ctx.currentTime + i * 0.18);
+      osc.stop(ctx.currentTime + i * 0.18 + 0.45);
+    });
+  } catch { /* no sound support */ }
+}
+
+function renderHealthToday(today) {
+  const p = $("health-today");
+  const parts = [];
+  if (today.eye) parts.push(`${today.eye} eye break${today.eye === 1 ? "" : "s"}`);
+  if (today.water) parts.push(`${today.water} drink${today.water === 1 ? "" : "s"} of water`);
+  p.hidden = parts.length === 0;
+  p.textContent = parts.length ? `${parts.join(" · ")} today` : "";
+}
+
+async function loadReminders() {
+  try {
+    const r = await api("/api/reminders");
+    reminderCfg = { eye: r.eye, water: r.water, waterEvery: r.waterEvery };
+    reminderState = Reminders.startReminders(reminderCfg, focusMs);
+    $("set-eye").checked = r.eye;
+    $("set-water").checked = r.water;
+    $("set-water-every").value = r.waterEvery;
+    $("set-water-every").disabled = !r.water;
+    renderHealthToday(r.today);
+  } catch {
+    // Offline or a server problem: reminders stay off for now, the timer works as usual
+  }
+}
+
+async function saveReminderSettings() {
+  const n = Number($("set-water-every").value);
+  const waterEvery = Number.isInteger(n) && n >= 15 && n <= 120 ? n : reminderCfg.waterEvery;
+  $("set-water-every").value = waterEvery;
+  const want = { eye: $("set-eye").checked, water: $("set-water").checked, waterEvery };
+  $("set-water-every").disabled = !want.water;
+  try {
+    const r = await api("/api/reminders", { method: "PATCH", body: JSON.stringify(want) });
+    reminderCfg = { eye: r.eye, water: r.water, waterEvery: r.waterEvery };
+    // Starts counting from now (turning one on doesn't fire straight away)
+    reminderState = Reminders.startReminders(reminderCfg, focusMs);
+    if (want.eye || want.water) askNotificationPermission();
+  } catch (err) {
+    showMessage(`Couldn't save your reminder choice. ${err.message}`, true);
+  }
+}
+["set-eye", "set-water", "set-water-every"].forEach((id) => $(id).addEventListener("change", saveReminderSettings));
 
 // ---------- Insights ----------
 async function loadStats() {
@@ -1553,6 +1701,8 @@ window.addEventListener("pagehide", () => pendingDelete && pendingDelete.commit(
 
 fillSettingsForm();
 renderPresets();
+renderNotifyNote();
+loadReminders();
 render();
 refreshAll();
 // Anything finished offline last time goes now

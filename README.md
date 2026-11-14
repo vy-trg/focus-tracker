@@ -39,6 +39,11 @@ Focus Tracker times each session with built-in breaks, saves it under a category
 - **Accurate on phones:** the timer counts down to a fixed end time, so it stays correct even when the phone slows down a background tab.
 - **Validation on the server and in the database:** labels must be 1–60 characters and minutes 1–180; bad input gets a `400` with a clear message.
 - **"Today" means today in Brisbane:** the database runs in UTC, so stats convert to `Australia/Brisbane` first.
+- **Habits that tick themselves:** "2 study sessions a day" is ticked from the sessions you already log, with today's progress, the last 7 days and a streak. In the last 6 hours of the day you see how long is left to keep a streak. (docs/habits.md)
+- **Study rooms (body doubling):** make a room, share its 6-letter code, and focus on one shared timer with friends. Anyone can start, pause or reset; the others are asked first (15 seconds to say Join or Not this one), and someone who joins late gets only the minutes they were there. Built with Socket.IO; the server owns the clock. (docs/study-rooms.md)
+- **Works offline:** the page opens without a connection, and a session finished offline is kept on the device and sent once you're back, saved only once and dated when you did it. (docs/offline.md)
+- **Health reminders while you focus (optional):** an eye break every 20 minutes of focus (look about 6 metres away for 20 seconds, with a 20-second ring) and a water reminder every 15 to 120 minutes. Only during focus, never in breaks; saved with your account; today's count shows under Today. A general tip for long screen time based on the 20-20-20 rule recommended by the American Academy of Ophthalmology, **not medical advice**.
+- **Notifications when time is up** in another tab, if you turn them on (permission is asked when you press Start). On iPhone and iPad they only work after **Add to Home Screen** (iOS 16.4+), which the settings say in plain words.
 - Light and dark mode, sized for phones.
 
 ---
@@ -74,6 +79,8 @@ Focus Tracker times each session with built-in breaks, saves it under a category
 | `PATCH`, `DELETE` | `/api/tasks/:id` | **Requires login.** Mark done or rename / delete. `404` if the task isn't yours |
 | `GET`, `POST` | `/api/habits` | **Requires login.** Your habits / add one: `{ "name": "Study", "category": "study", "target_sessions": 2 }` |
 | `PATCH`, `DELETE` | `/api/habits/:id` | **Requires login.** Change any field / delete. `404` if the habit isn't yours |
+| `GET`, `PATCH` | `/api/reminders` | **Requires login.** Your reminder choices `{ eye, water, waterEvery }` (15–120) and today's counts |
+| `POST` | `/api/reminders/done` | **Requires login.** An eye break taken or water had: `{ "kind": "eye" \| "water" }` |
 | `GET` | `/api/health` | `{ ok: true }` (no login needed) |
 
 API routes that require login return `401 { "error": "Please log in" }` without a valid session cookie. `/api` allows 100 requests per 15 minutes per IP; `/login` and `/signup` allow 10.
@@ -217,6 +224,9 @@ LIMIT $3 + 1;
 It fetches one extra row to know whether there is another page, without a `COUNT(*)`. The response is `{ sessions, nextBefore }`, and the "Show more" button asks for the next 10 with `before=nextBefore`. The index `(user_id, id DESC)` (migration `002`) matches the `WHERE` and `ORDER BY`.
 
 ## Known limitations & next steps
+
+- The study room needs a connection (it's live by nature); everything else keeps working offline.
+- Health reminders count focus time while the page is open; a phone that puts the tab to sleep shows the reminder when it wakes (and as a notification, if those are on).
 
 - No password reset or email verification yet: a forgotten password means a new account.
 - Reports group by the day a session **started**, so a session that starts at 11:50pm counts for that day even if it ends after midnight.
