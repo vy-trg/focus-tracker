@@ -376,6 +376,10 @@ async function api(path, options = {}) {
     location.href = "/login";
     throw new Error("Not logged in");
   }
+  // No connection and no copy on this device yet (sw.js)
+  if (res.status === 503 && res.headers.get("X-Offline") === "1") {
+    throw new Error("You're offline. This shows once you're back online.");
+  }
   if (res.status === 429) {
     throw new Error("Too many requests in a short time. Wait a minute and try again.");
   }
@@ -419,6 +423,7 @@ async function saveSession(minutes) {
     finished_at: new Date().toISOString(),
   });
   writeQueue(q);
+  loadStats(); // counts it in Today straight away, even before it's sent
   await sendQueued(true);
 }
 
@@ -438,7 +443,7 @@ async function sendQueued(justFinished = false) {
       } catch (err) {
         // The server said no (e.g. the task was deleted, or it's over a week old): it can never be
         // saved as it is, so it leaves the queue with a message instead of blocking the rest
-        if (navigator.onLine && /must|Unknown|week/.test(err.message)) {
+        if (navigator.onLine && /must|Unknown|days/.test(err.message)) {
           writeQueue(readQueue().filter((x) => x.client_id !== item.client_id));
           showMessage(`A session from ${new Date(item.finished_at).toLocaleString("en-AU")} couldn't be saved: ${err.message}`, true);
           continue;
@@ -466,6 +471,8 @@ async function sendQueued(justFinished = false) {
 window.addEventListener("online", () => sendQueued());
 
 // "2 sessions waiting to be sent" under the timer while anything is queued
+const brisbaneDate = (iso) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "Australia/Brisbane" });
+
 function renderOfflineNote(n = readQueue().length) {
   const note = document.getElementById("offline-note");
   if (!note) return;
@@ -477,6 +484,13 @@ window.addEventListener("offline", () => renderOfflineNote());
 // The app's files stay on this device (sw.js), so the page opens and the timer runs offline
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+  // The very first visit: the page loaded before sw.js was running, so nothing was stored yet.
+  // Once it takes over, load the data again through it, so the first visit already works offline.
+  let first = !navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (first && navigator.onLine) refreshAll();
+    first = false;
+  });
 }
 // Logging out removes the stored copies of your pages and data from this device
 document.querySelector('form[action="/logout"]')?.addEventListener("submit", () => {
@@ -750,6 +764,13 @@ function showUndo(text, onUndo) {
 async function loadStats() {
   try {
     const stats = await api("/api/stats");
+    // Sessions finished today that are still waiting on this device count too
+    const waiting = readQueue().filter((x) => brisbaneDate(x.finished_at) === brisbaneDate(new Date().toISOString()));
+    if (waiting.length) {
+      if (stats.today.count === 0) stats.streak += 1; // today wasn't counted yet; now it is
+      stats.today.count += waiting.length;
+      stats.today.total_minutes += waiting.reduce((n, x) => n + x.minutes, 0);
+    }
     $("today-minutes").textContent = stats.today.total_minutes;
     $("today-count").textContent = stats.today.count;
     $("streak").textContent = stats.streak;

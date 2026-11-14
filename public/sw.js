@@ -5,7 +5,7 @@
 // - The page itself and /api reads: from the network first; if there's no connection, the last copy.
 // - Styles, scripts, fonts: the copy on this device straight away, refreshed in the background.
 // - Anything else (saving, logging in, the study room): the network only. Never cached.
-const VERSION = "v1";
+const VERSION = "v2";
 const CACHE = `focus-tracker-${VERSION}`;
 const SHELL = ["/", "/style.css", "/timer.js", "/socket.io/socket.io.min.js"];
 
@@ -45,7 +45,7 @@ async function networkFirst(request) {
       const home = await cache.match("/");
       if (home) return home;
     }
-    return new Response(JSON.stringify({ error: "offline" }), { status: 503, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "offline" }), { status: 503, headers: { "Content-Type": "application/json", "X-Offline": "1" } });
   }
 }
 

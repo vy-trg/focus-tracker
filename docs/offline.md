@@ -13,7 +13,7 @@ The problem: a focus block finished on a train or with patchy Wi-Fi used to be k
 | The same session is sent twice (the reply got lost) | Saved once. Each session has an id made on the device (`client_id`); the server answers 200 with the one it already has. |
 | Log out | The stored copies of your pages and data are removed from the device. Unsent sessions stay, in a queue for that account only, and go the next time that account logs in here. |
 
-A session sent later keeps the time it really happened (`finished_at`), so it counts for the right day in stats, streaks and habits. The server accepts up to a week back and nothing in the future (5 minutes leeway for a phone clock that's ahead).
+A session sent later keeps the time it really happened (`finished_at`), so it counts for the right day in stats, streaks and habits. The server accepts up to 30 days back and nothing in the future (5 minutes leeway for a phone clock that's ahead).
 
 ## How
 
@@ -24,5 +24,6 @@ A session sent later keeps the time it really happened (`finished_at`), so it co
 ## Limits
 
 - The study room needs the connection (it's live by nature).
-- While offline, stats and the log don't include sessions still waiting to be sent.
-- Logging in needs the connection.
+- While offline, Today (minutes, sessions, streak) already counts sessions waiting to be sent; the log, reports and habits show them once they're sent.
+- Logging in needs the connection (the password is checked by the server). Already logged in, you stay logged in offline.
+- The very first visit stores the page and your data as soon as sw.js takes over, so it works offline from then on.

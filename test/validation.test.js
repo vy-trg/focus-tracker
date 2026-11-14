@@ -165,10 +165,10 @@ test("a session sent later can carry its own id and when it finished", () => {
   assert.match(validateSession({ ...ok, client_id: "not-a-uuid" }, now)[0].message, /UUID/);
 });
 
-test("finished_at: up to a week ago, never in the future (5 minutes leeway for a fast clock)", () => {
+test("finished_at: up to 30 days ago, never in the future (5 minutes leeway for a fast clock)", () => {
   const now = Date.parse("2026-11-14T05:00:00Z");
-  assert.ok(parseFinishedAt("2026-11-08T06:00:00Z", now));
-  assert.equal(parseFinishedAt("2026-11-01T05:00:00Z", now), null, "older than a week");
+  assert.ok(parseFinishedAt("2026-10-16T06:00:00Z", now));
+  assert.equal(parseFinishedAt("2026-10-14T05:00:00Z", now), null, "older than 30 days");
   assert.ok(parseFinishedAt("2026-11-14T05:04:00Z", now), "a clock 4 minutes ahead is fine");
   assert.equal(parseFinishedAt("2026-11-14T06:00:00Z", now), null, "an hour in the future");
   assert.equal(parseFinishedAt("yesterday", now), null);
