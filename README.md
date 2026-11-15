@@ -10,7 +10,7 @@ A Pomodoro timer with built-in breaks that saves every focus session to your own
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
-    <img src="docs/screenshot-light.png" alt="Focus Tracker showing the timer, today's stats and recent sessions" width="360">
+    <img src="docs/screenshot-light.png" alt="Focus Tracker: the timer with presets, tasks, Today with streak, eye breaks and a timeline, the study room, and habits that tick themselves" width="720">
   </picture>
 </p>
 
