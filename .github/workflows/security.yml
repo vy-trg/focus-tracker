@@ -1,0 +1,66 @@
+name: Security scan
+
+# Two free scanners that complement gitleaks (secrets) and npm test (behaviour):
+# - Semgrep reads our JavaScript and flags insecure patterns (SQL built from strings,
+#   unescaped innerHTML, risky Express settings).
+# - Trivy checks npm packages for known vulnerabilities (CVEs) and the Dockerfile
+#   for risky settings.
+# Findings go to the repo's Security tab (Code scanning). Only a HIGH or CRITICAL
+# package vulnerability that already has a fix fails the build.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 20 * * 0' # Mondays 6am Brisbane: new CVEs appear even when our code doesn't change
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write # lets the job upload results to the Security tab
+
+jobs:
+  semgrep:
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:1.185.0
+    steps:
+      # Actions are pinned to a full commit hash, not a tag: a tag can be moved to
+      # point at different code, a commit hash can't.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Run Semgrep
+        run: >
+          semgrep scan --metrics=off
+          --config p/javascript --config p/expressjs --config p/nodejsscan --config p/dockerfile
+          --exclude test --sarif --output semgrep.sarif .
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Trivy report (all severities, sent to the Security tab)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scanners: vuln,misconfig
+          format: sarif
+          output: trivy.sarif
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        if: always()
+        with:
+          sarif_file: trivy.sarif
+          category: trivy
+      - name: Fail on HIGH/CRITICAL package vulnerabilities that have a fix
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
