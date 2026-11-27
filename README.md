@@ -52,7 +52,7 @@ Focus Tracker times each session with built-in breaks, saves it under a category
 
 | Area | Tools |
 |---|---|
-| Server | Node.js 20+, Express 5, EJS |
+| Server | Node.js 20+, Express 5, EJS, Socket.IO (study rooms) |
 | Database | PostgreSQL on [Neon](https://neon.tech), `pg` driver |
 | Auth | Passport (local strategy), bcrypt, express-session with sessions stored in Postgres |
 | Security | helmet (security headers), express-rate-limit, gitleaks (secret scanning) |
@@ -116,7 +116,7 @@ cp .env.example .env
 3. Check the connection: `npm run test-db`
 4. Start the app: `npm run dev`, then open http://localhost:3000
 
-**Testing tip:** set `FOCUS_SECONDS` in `public/timer.js` to `10` so you don't wait 25 minutes. Set it back before committing.
+**Testing tip:** open `http://localhost:3000/?fast` so the timer counts seconds instead of minutes and you don't wait 25 minutes. It only works on `localhost`, and there is nothing to change back before committing.
 
 ---
 
@@ -142,7 +142,7 @@ The live demo on Render uses Render's Node runtime; CI builds the Docker image o
 npm test
 ```
 
-Unit tests use Node's built-in test runner (`node:test`), so there's nothing extra to install. They cover `validation.js`, the checks every API request goes through:
+Tests use Node's built-in test runner (`node:test`), so there's nothing extra to install. The files in `test/` cover `validation.js`, `streak.js`, `habits.js`, `rooms.js` (and the live rooms over real sockets), the reminders and the landing page. For example, `validation.js` holds the checks every API request goes through:
 
 - a normal session passes; a 60-character label passes but 61 fails
 - minutes must be a whole number from 1 to 180 (`"abc"`, `25.5`, `0`, `-5`, `181`, `null` are rejected)
@@ -157,21 +157,29 @@ These tests don't need a database, so they run anywhere, including CI.
 ## Project structure
 
 ```
-app.js             Express app: routes, validation, API, login sessions
-auth.js            Passport login strategy and the requireAuth guard
-db/pool.js         PostgreSQL connection pool (SSL for Neon)
-db/queries.js      All SQL queries
-db/schema.sql      Table definition with CHECK constraints
-views/index.ejs    Page layout
-views/login.ejs    Log in page
-views/signup.ejs   Sign up page
-public/timer.js    Timer and API calls in the browser
-public/style.css   Styles (light + dark)
-scripts/test-db.js Checks the database connection
-validation.js      Input checks for the API (unit tested)
-test/              Unit tests (npm test)
-Dockerfile         Builds the app image (Node 22, runs as a non-root user)
-compose.yaml       Local app + PostgreSQL for development
+app.js               Express app: routes, API, login sessions, starts the server
+auth.js              Passport login strategy and the requireAuth guard
+validation.js        Input checks for the API (unit tested)
+streak.js, habits.js Streak and habit progress (pure logic, unit tested)
+rooms.js             Study rooms: the room state, kept in memory (unit tested)
+rooms-socket.js      Study rooms over Socket.IO, using the same login cookie
+db/pool.js           PostgreSQL connection pool (SSL for Neon)
+db/queries.js        All SQL queries
+db/schema.sql        Full table definitions with CHECK constraints
+db/migrations/       Numbered changes for an existing database (run by hand)
+views/               Pages: landing, index (the app), login, signup
+public/timer.js      The browser side: timer, tasks, reports, habits, rooms, offline queue
+public/reminders.js  Eye break and water reminders
+public/sw.js         Service worker, so the page opens offline
+public/style.css     Styles (light + dark)
+scripts/test-db.js   Checks the database connection
+test/                Tests (npm test)
+docs/                Notes on habits, study rooms and offline, plus README images
+focus-ARCHITECTURE.md Diagrams: components, data flow, timer states, errors
+BUGS.md              Bugs I hit and what I learned
+.github/workflows/   CI: tests and Docker build, security scans, secret scanning
+Dockerfile           Builds the app image (Node 22, runs as a non-root user)
+compose.yaml         Local app + PostgreSQL for development
 ```
 
 ---
