@@ -27,7 +27,7 @@ public/sw.js       Service worker for offline loading
 public/reminders.js  Eye and water reminders
 test/              node:test unit tests
 docs/              Feature write-ups (habits, study rooms, offline) and README images
-focus-ARCHITECTURE.md  Diagrams (partly outdated, see Gotchas)
+focus-ARCHITECTURE.md  Diagrams: components, data flow, timer states, errors
 BUGS.md            Log of past incidents and lessons
 ```
 
@@ -42,7 +42,7 @@ npm run dev              # node --watch, listens on PORT or 3000
 
 - `npm run dev` only watches `app.js`, `auth.js`, `db/` and `views/`. Changes to other server files or `public/` need a manual restart or a browser reload.
 - Without Neon: `docker compose up --build` starts the app and a local Postgres, and creates the tables from `db/schema.sql`. No `.env` needed.
-- For quick manual testing, set `FOCUS_SECONDS` in `public/timer.js` to `10`. Restore it before committing.
+- For quick manual testing, open the app with `?fast` (for example `http://localhost:3000/?fast`): the timer counts seconds instead of minutes. It only works on `localhost` (`public/timer.js`).
 
 ## Tests
 
@@ -76,4 +76,3 @@ node --test --test-name-pattern="pattern" test/*.test.js   # one test by name
 - The timer counts to a fixed end timestamp rather than ticking, so background tabs stay accurate. Sessions finished offline are queued on the device and deduplicated when sent (`docs/offline.md`).
 - `test/landing.test.js` fails if a landing-page tile mentions a feature the app doesn't have.
 - `.gitignore` covers `.env.*` except `.env.example`, and `.pre-commit-config.yaml` runs a gitleaks hook (see BUGS.md for why it is set up that way).
-- Docs drift: `focus-ARCHITECTURE.md` still shows `LIMIT 50` and has no rooms or habits, and the README "Project structure" list is missing several files. Treat the code as the source of truth.
