@@ -42,7 +42,7 @@ npm run dev              # node --watch, listens on PORT or 3000
 
 - `npm run dev` only watches `app.js`, `auth.js`, `db/` and `views/`. Changes to other server files or `public/` need a manual restart or a browser reload.
 - Without Neon: `docker compose up --build` starts the app and a local Postgres, and creates the tables from `db/schema.sql`. No `.env` needed.
-- For quick manual testing, set `FOCUS_SECONDS` in `public/timer.js` to `10`. Restore it before committing.
+- For quick manual testing, open the app with `?fast` (for example `http://localhost:3000/?fast`): the timer counts seconds instead of minutes. It only works on `localhost` (`public/timer.js`).
 
 ## Tests
 
